@@ -1,6 +1,6 @@
-# HAVN
+# MyCompound
 
-> HAVN, pronounced "haven", is a property manager backend API built to help landlords track properties, units, tenants, and rent in one place. The platform focuses on reducing missed payments, simplifying rent tracking, and keeping a clear history of tenant activity.
+> MyCompoundn", is a property manager backend API built to help landlords track properties, units, tenants, and rent in one place. The platform focuses on reducing missed payments, simplifying rent tracking, and keeping a clear history of tenant activity.
 
 ---
 
@@ -40,7 +40,7 @@ Before you begin, make sure you have the following installed:
 
 ## Tech Stack
 
-Based on `package.json`, HAVN uses:
+Based on `package.json`, MyCompound uses:
 
 - **Runtime** - Node.js
 - **Framework** - Express 5
@@ -131,13 +131,13 @@ The dev server runs `tsx watch src/server.ts`, so code changes restart the API a
 
 Use `.env` for local runtime settings and secrets. The source of truth for required keys should be `.env.example`, and `npm run sync-env` keeps that file aligned with the local environment.
 
-| Variable type | What it is for |
-| --- | --- |
-| App settings | Runtime mode and server port. |
-| Database config | MongoDB connection details. |
-| Auth secrets | Token signing or session secrets. |
-| CORS settings | Allowed frontend origin(s). |
-| Cache and jobs | Redis settings for queues or rate limiting. |
+| Variable type        | What it is for                                               |
+| -------------------- | ------------------------------------------------------------ |
+| App settings         | Runtime mode and server port.                                |
+| Database config      | MongoDB connection details.                                  |
+| Auth secrets         | Token signing or session secrets.                            |
+| CORS settings        | Allowed frontend origin(s).                                  |
+| Cache and jobs       | Redis settings for queues or rate limiting.                  |
 | Third-party services | Credentials for tools such as Cloudinary or email providers. |
 
 ### Notes

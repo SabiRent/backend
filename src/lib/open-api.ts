@@ -24,7 +24,7 @@ export const generateOpenApiSpec = () => {
   return generator.generateDocument({
     openapi: '3.0.3',
     info: {
-      title: 'HAVN API',
+      title: 'MyCompound API',
       version: '1.0.0',
       description: '',
     },
