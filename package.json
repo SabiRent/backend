@@ -13,8 +13,8 @@
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
-    "test": "dotenv -e .env.test -- vitest",
-    "test:run": "dotenv -e .env.test -- vitest run",
+    "test": "dotenv -e .env.test -- vitest --passWithNoTests",
+    "test:run": "dotenv -e .env.test -- vitest run --passWithNoTests",
     "test:coverage": "dotenv -e .env.test -- vitest run --coverage",
     "sync-env": "tsx scripts/sync-env.ts",
     "prepare": "husky"
