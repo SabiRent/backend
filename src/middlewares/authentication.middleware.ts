@@ -6,7 +6,7 @@ import { StatusCodes } from 'http-status-codes';
 import jwt from 'jsonwebtoken';
 import type { UserRole } from '../constants/user-role';
 
-interface JwtPayload {
+export interface JwtPayload {
   id: string;
   email: string;
   role: UserRole;

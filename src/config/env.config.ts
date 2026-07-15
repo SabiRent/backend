@@ -30,3 +30,6 @@ export const MAIL_FROM = process.env.MAIL_FROM || '';
 export const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || 'reset_secret';
 export const RESET_TOKEN_EXPIRES_IN = process.env.RESET_TOKEN_EXPIRES_IN || '15m';
 export const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
+
+// Redis
+export const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
