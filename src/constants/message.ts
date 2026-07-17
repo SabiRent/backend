@@ -48,4 +48,5 @@ export const ERROR_MESSAGE = {
   TOO_MANY_REQUESTS: 'Too many requests, please try again later',
   NO_FIELDS_TO_UPDATE: 'No fields provided to update',
   INVALID_CURRENT_PASSWORD: 'Current password is incorrect',
+  INVALID_FILE_TYPE: 'Unsupported file type',
 } as const;

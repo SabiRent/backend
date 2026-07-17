@@ -5,6 +5,8 @@
   "main": "dist/server.mjs",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "worker:dev": "tsx watch src/worker.ts",
+    "worker:start": "node dist/worker.mjs",
     "build": "tsdown",
     "start": "node dist/server.mjs",
     "type-check": "tsc --noEmit",

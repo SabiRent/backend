@@ -26,10 +26,21 @@ export const MAIL_USER = process.env.MAIL_USER || '';
 export const MAIL_PASS = process.env.MAIL_PASS || '';
 export const MAIL_FROM = process.env.MAIL_FROM || '';
 
+// Redis (BullMQ) — used by the async email queue/worker
+export const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+
 // Reset Password
 export const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || 'reset_secret';
 export const RESET_TOKEN_EXPIRES_IN = process.env.RESET_TOKEN_EXPIRES_IN || '15m';
 export const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
-// Redis
-export const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+// File storage
+export const FILE_STORAGE_PROVIDER = process.env.FILE_STORAGE_PROVIDER || 'cloudinary';
+export const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB) || 5;
+// Default lifetime (seconds) for signed/time-limited access URLs to private files
+export const SIGNED_URL_EXPIRES_IN = Number(process.env.SIGNED_URL_EXPIRES_IN) || 3600;
+
+// Cloudinary
+export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
+export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
+export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
