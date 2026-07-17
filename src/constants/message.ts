@@ -7,6 +7,8 @@ export const SUCCESS_MESSAGE = {
   EMAIL_VERIFIED_SUCCESS: 'Email verified successfully',
   USER_ACTIVATE_SUCCESS: 'User account activated successfully',
   USER_DEACTIVATE_SUCCESS: 'User account deactivated successfully',
+  LOGIN_SUCCESS: 'Login successful',
+  TOKEN_REFRESH_SUCCESS: 'Token refreshed successfully',
   LOGOUT_SUCCESS: 'Logged out successfully',
   PASSWORD_RESET_EMAIL_SENT: 'Password reset email sent successfully',
 } as const;
