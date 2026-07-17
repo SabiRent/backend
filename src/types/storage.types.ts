@@ -32,6 +32,13 @@ export interface SignedUrlOptions {
   resourceType?: string;
 }
 
+export interface PublicUrlOptions {
+  /** Provider hint carried over from upload metadata (e.g. `image`, `video`, `raw`). */
+  resourceType?: string;
+  /** File extension/format so the delivery URL matches the stored asset. */
+  format?: string;
+}
+
 export interface DeleteFileOptions {
   resourceType?: string;
   /** Provider delivery type, e.g. Cloudinary `upload` vs `authenticated`. */
@@ -46,6 +53,9 @@ export interface DeleteFileOptions {
 export interface StorageAdapter {
   readonly provider: StorageProvider;
   upload(input: UploadFileInput): Promise<UploadFileResult>;
+  /** Plain, directly-servable URL for a public file. */
+  getPublicUrl(providerFileId: string, options?: PublicUrlOptions): string;
+  /** Signed, time-limited URL for a private file. */
   getSignedUrl(providerFileId: string, options?: SignedUrlOptions): Promise<string>;
   delete(providerFileId: string, options?: DeleteFileOptions): Promise<void>;
 }

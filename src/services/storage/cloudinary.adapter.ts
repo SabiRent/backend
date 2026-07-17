@@ -4,6 +4,7 @@ import { StorageProvider } from '@/constants/storage';
 import AppError from '@/errors/AppError';
 import type {
   DeleteFileOptions,
+  PublicUrlOptions,
   SignedUrlOptions,
   StorageAdapter,
   UploadFileInput,
@@ -18,8 +19,8 @@ import { StatusCodes } from 'http-status-codes';
  * Private files are stored with delivery type `authenticated`, which makes the
  * object undeliverable without a signed URL — so {@link getSignedUrl} is the
  * only way to read them, and those URLs carry an `expires_at` for time-limited
- * access. Public files use the plain `upload` delivery type and are served from
- * their `secure_url` directly.
+ * access. Public files use the plain `upload` delivery type, and {@link getPublicUrl}
+ * builds their normal (unsigned) delivery URL.
  */
 export class CloudinaryAdapter implements StorageAdapter {
   readonly provider = StorageProvider.CLOUDINARY;
@@ -53,6 +54,15 @@ export class CloudinaryAdapter implements StorageAdapter {
         bytes: result.bytes,
       },
     };
+  }
+
+  getPublicUrl(providerFileId: string, options: PublicUrlOptions = {}): string {
+    return cloudinary.url(providerFileId, {
+      resource_type: options.resourceType ?? 'image',
+      type: 'upload',
+      secure: true,
+      ...(options.format ? { format: options.format } : {}),
+    });
   }
 
   async getSignedUrl(providerFileId: string, options: SignedUrlOptions = {}): Promise<string> {

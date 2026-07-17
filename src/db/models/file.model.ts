@@ -23,12 +23,11 @@ const fileSchema = new Schema(
       required: true,
     },
 
-    // --- context (generic/polymorphic association) ---
-    // Lets one File collection serve any upload context — property photos,
-    // tenant ID documents, etc. — without a bespoke model per use case.
+    // --- context ---
+    // Logical grouping so one File collection serves any upload context
+    // (property photos, tenant ID documents, ...). The association to an owning
+    // record is held by that record (it stores the file id), not here.
     folder: { type: String },
-    resourceType: { type: String },
-    resourceId: { type: Schema.Types.ObjectId },
 
     // Provider-specific bits needed to later sign or delete the object.
     metadata: { type: Schema.Types.Mixed },
@@ -36,7 +35,6 @@ const fileSchema = new Schema(
   { timestamps: true },
 );
 
-fileSchema.index({ resourceType: 1, resourceId: 1 });
 fileSchema.index({ provider: 1, providerFileId: 1 });
 
 export type FileSchema = InferSchemaType<typeof fileSchema>;

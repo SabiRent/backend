@@ -10,12 +10,17 @@ import path from 'node:path';
  */
 const TEMPLATES_DIR = path.join(process.cwd(), 'src', 'templates');
 
-export type EmailTemplate = 'welcome' | 'reset-password';
-
-const TEMPLATE_FILES: Record<EmailTemplate, string> = {
+/**
+ * Single source of truth for email templates. Adding a template is one entry
+ * here — the `EmailTemplate` type is derived from these keys via `keyof typeof`,
+ * so there is no separate union to keep in sync however many templates we add.
+ */
+const TEMPLATE_FILES = {
   welcome: 'welcome.temp.ejs',
   'reset-password': 'reset-password.temp.ejs',
-};
+} as const;
+
+export type EmailTemplate = keyof typeof TEMPLATE_FILES;
 
 export const renderEmailTemplate = (
   template: EmailTemplate,

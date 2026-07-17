@@ -8,5 +8,8 @@ export default defineConfig({
     globals: true,
     include: ['tests/**/*.spec.ts'],
     setupFiles: ['tests/setup.ts'],
+    // Run test files sequentially — integration tests share a DB and must not
+    // run concurrently or they'd clobber each other's data.
+    fileParallelism: false,
   },
 });

@@ -11,9 +11,6 @@ export interface UploadFileParams {
   folder?: string;
   /** Store as private → access is only ever via signed, time-limited URLs. */
   isPrivate?: boolean;
-  /** Optional polymorphic association to the owning resource. */
-  resourceType?: string;
-  resourceId?: string;
 }
 
 export interface StoredFile {
@@ -28,23 +25,26 @@ export interface StoredFile {
  * expires; always resolve on read.
  */
 const resolveAccessUrl = async (file: FileDocument): Promise<string> => {
-  if (file.visibility === FileVisibility.PUBLIC) return file.url;
-
   const adapter = getStorageAdapter();
   const meta = (file.metadata ?? {}) as Record<string, unknown>;
+  const resourceType = typeof meta.resourceType === 'string' ? meta.resourceType : undefined;
 
-  return adapter.getSignedUrl(file.providerFileId, {
-    resourceType: typeof meta.resourceType === 'string' ? meta.resourceType : undefined,
-  });
+  if (file.visibility === FileVisibility.PUBLIC) {
+    const format = typeof meta.format === 'string' ? meta.format : undefined;
+    return adapter.getPublicUrl(file.providerFileId, { resourceType, format });
+  }
+
+  return adapter.getSignedUrl(file.providerFileId, { resourceType });
 };
 
 /**
  * Uploads a multer file through the active storage provider and records it in
- * the File collection. Generic across contexts — pass `folder`/`resourceType`
- * to scope it (property photos today, tenant documents later).
+ * the File collection. Generic across contexts — pass `folder` to scope it
+ * (property photos today, tenant documents later). The caller links the returned
+ * file to its owning record by storing `file.id` on that record.
  */
 export const uploadFile = async (params: UploadFileParams): Promise<StoredFile> => {
-  const { file, folder, isPrivate = false, resourceType, resourceId } = params;
+  const { file, folder, isPrivate = false } = params;
 
   if (!file) {
     throw AppError('No file provided', StatusCodes.BAD_REQUEST, ErrorCode.INVALID_INPUT);
@@ -69,8 +69,6 @@ export const uploadFile = async (params: UploadFileParams): Promise<StoredFile> 
     size: file.size,
     visibility: isPrivate ? FileVisibility.PRIVATE : FileVisibility.PUBLIC,
     folder,
-    resourceType,
-    resourceId,
     metadata: uploaded.metadata,
   });
 
