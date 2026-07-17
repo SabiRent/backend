@@ -8,8 +8,8 @@ import { renderEmailTemplate } from '@/services/email-template.service';
  * decoupled from auth — a caller just supplies a name / email / token.
  */
 
-export const sendWelcomeEmail = async (params: { to: string; name: string }) => {
-  const html = await renderEmailTemplate('welcome', { name: params.name });
+export const sendWelcomeEmail = async (params: { to: string; fullName: string }) => {
+  const html = await renderEmailTemplate('welcome', { name: params.fullName });
   return enqueueEmail({
     to: params.to,
     subject: 'Welcome to MyCompound',
@@ -19,13 +19,13 @@ export const sendWelcomeEmail = async (params: { to: string; name: string }) => 
 
 export const sendPasswordResetEmail = async (params: {
   to: string;
-  name: string;
+  fullName: string;
   token: string;
 }) => {
-  const resetUrl = `${CLIENT_URL}/reset-password?token=${params.token}`;
+  const resetLink = `${CLIENT_URL}/reset-password?token=${params.token}`;
   const html = await renderEmailTemplate('reset-password', {
-    name: params.name,
-    resetUrl,
+    fullName: params.fullName,
+    resetLink,
   });
   return enqueueEmail({
     to: params.to,

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/config/env.config';
+import { registerAuthDocs } from '@/lib/auth.docs';
 import { registry } from '@/lib/open-api-registry';
 import { OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 
@@ -12,6 +13,8 @@ let initialized = false;
 
 const ensureDocsRegistered = () => {
   if (initialized) return;
+
+  registerAuthDocs();
 
   initialized = true;
 };

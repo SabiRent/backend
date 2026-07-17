@@ -1,5 +1,6 @@
 import { REDIS_URL } from '@/config/env.config';
 import type { ConnectionOptions } from 'bullmq';
+import Redis from 'ioredis';
 
 /**
  * BullMQ connection options, parsed from REDIS_URL.
@@ -21,3 +22,13 @@ export const redisConnection: ConnectionOptions = {
   ...(url.protocol === 'rediss:' ? { tls: {} } : {}),
   maxRetriesPerRequest: null,
 };
+
+/**
+ * Shared ioredis client instance (used by the rate limiter). Kept separate from
+ * the BullMQ connection above, which needs plain options rather than a client.
+ */
+const redisClient = new Redis(REDIS_URL, {
+  enableOfflineQueue: false,
+});
+
+export default redisClient;

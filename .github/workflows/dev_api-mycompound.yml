@@ -14,20 +14,69 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read #This is required for actions/checkout
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --quiet --eval \"db.adminCommand('ping').ok\" mongodb://localhost:27017/test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Node.js version
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version: '24'
+          cache: npm
 
-      - name: npm install, build, and test
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create CI test env
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          cat > .env.test <<'EOF'
+          DATABASE_URL=mongodb://localhost:27017/mycompound_test
+          PORT=8000
+          ALLOWED_ORIGIN=http://localhost:3000
+          API_BASE_URL=http://localhost:8000/api/v1
+          JWT_ACCESS_SECRET=test-jwt-access-secret
+          JWT_REFRESH_SECRET=test-jwt-refresh-secret
+          JWT_ACCESS_EXPIRES_IN=15m
+          JWT_REFRESH_EXPIRES_IN=7d
+          COOKIE_SECRET=test-cookie-secret
+          MAIL_HOST=localhost
+          MAIL_PORT=1025
+          MAIL_USER=test@example.com
+          MAIL_PASS=test-password
+          MAIL_FROM=no-reply@mycompound.test
+          RESET_TOKEN_SECRET=test-reset-token-secret
+          RESET_TOKEN_EXPIRES_IN=15m
+          CLIENT_URL=http://localhost:3000
+          REDIS_URL=redis://localhost:6379/15
+          EOF
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Run tests
+        run: npm run test:run --if-present
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -47,7 +96,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-      
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -62,4 +111,3 @@ jobs:
           app-name: 'api-mycompound'
           slot-name: 'Production'
           package: .
-          

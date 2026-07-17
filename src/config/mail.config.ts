@@ -5,6 +5,9 @@ import nodemailer from 'nodemailer';
  * Nodemailer SMTP transport. Provider-agnostic: point MAIL_* at Resend
  * (smtp.resend.com, user "resend", pass = API key), or any other SMTP provider,
  * and no application code changes.
+ *
+ * Exported both as the named `mailTransport` and as the default export
+ * (`transporter`) so callers on either convention share a single transport.
  */
 export const mailTransport = nodemailer.createTransport({
   host: MAIL_HOST,
@@ -12,3 +15,5 @@ export const mailTransport = nodemailer.createTransport({
   secure: MAIL_PORT === 465, // 465 = implicit TLS; 587/2587 = STARTTLS
   auth: MAIL_USER ? { user: MAIL_USER, pass: MAIL_PASS } : undefined,
 });
+
+export default mailTransport;

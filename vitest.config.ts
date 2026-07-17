@@ -7,9 +7,11 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['tests/**/*.spec.ts'],
-    setupFiles: ['tests/setup.ts'],
-    // Run test files sequentially — integration tests share a DB and must not
-    // run concurrently or they'd clobber each other's data.
+    setupFiles: ['./tests/setup.ts'],
+    // integration tests share one Mongo/Redis instance — running spec files in
+    // parallel would race on shared collections being cleared mid-test
     fileParallelism: false,
+    hookTimeout: 30000,
+    testTimeout: 15000,
   },
 });

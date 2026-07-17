@@ -1,0 +1,20 @@
+services:
+  redis:
+    image: redis:8-alpine
+    container_name: mycompound-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+
+  mongo-test:
+    image: mongo:7
+    container_name: mycompound-mongo-test
+    ports:
+      - '27018:27017'
+    volumes:
+      - mongo-test-data:/data/db
+
+volumes:
+  redis-data:
+  mongo-test-data:
