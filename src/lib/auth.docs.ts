@@ -17,6 +17,13 @@ const errorResponseSchema = z
   })
   .openapi('ErrorResponse');
 
+const validationErrorResponseSchema = z
+  .object({
+    success: z.literal(false),
+    errors: z.record(z.string(), z.string()),
+  })
+  .openapi('ValidationErrorResponse');
+
 const authUserSchema = z.object({
   id: z.string(),
   email: z.string(),
@@ -67,7 +74,10 @@ export const registerAuthDocs = () => {
         description: 'Email already registered',
         content: { 'application/json': { schema: errorResponseSchema } },
       },
-      '422': { description: 'Validation error' },
+      '422': {
+        description: 'Validation error',
+        content: { 'application/json': { schema: validationErrorResponseSchema } },
+      },
     },
   });
 
@@ -91,6 +101,10 @@ export const registerAuthDocs = () => {
       '429': {
         description: 'Too many failed attempts — account temporarily locked for 15 minutes',
         content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '422': {
+        description: 'Validation error',
+        content: { 'application/json': { schema: validationErrorResponseSchema } },
       },
     },
   });
@@ -139,6 +153,10 @@ export const registerAuthDocs = () => {
           'Always returns this response whether or not the email is registered, to avoid leaking account existence',
         content: { 'application/json': { schema: messageOnlyResponseSchema } },
       },
+      '422': {
+        description: 'Validation error',
+        content: { 'application/json': { schema: validationErrorResponseSchema } },
+      },
     },
   });
 
@@ -158,6 +176,10 @@ export const registerAuthDocs = () => {
       '401': {
         description: 'Invalid or expired reset token',
         content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '422': {
+        description: 'Validation error',
+        content: { 'application/json': { schema: validationErrorResponseSchema } },
       },
     },
   });

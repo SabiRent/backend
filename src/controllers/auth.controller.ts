@@ -17,7 +17,7 @@ import type {
   ResetPasswordInput,
   SignupInput,
 } from '@/validations/user.validation';
-import type { NextFunction, Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import jwt from 'jsonwebtoken';
 
@@ -34,113 +34,79 @@ const setRefreshTokenCookie = (res: Response, refreshToken: string) => {
   res.cookie('refreshToken', refreshToken, { ...refreshCookieBaseOptions, maxAge });
 };
 
-export const signupHandler = async (
-  req: Request<unknown, unknown, SignupInput>,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const user = await signup(req.body);
+export const signupHandler = async (req: Request<unknown, unknown, SignupInput>, res: Response) => {
+  const user = await signup(req.body);
 
-    res.status(StatusCodes.CREATED).json({
-      success: true,
-      message: SUCCESS_MESSAGE.CREATED,
-      data: user,
-    });
-  } catch (err) {
-    next(err);
-  }
+  res.status(StatusCodes.CREATED).json({
+    success: true,
+    message: SUCCESS_MESSAGE.CREATED,
+    data: user,
+  });
 };
 
-export const loginHandler = async (
-  req: Request<unknown, unknown, LoginInput>,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { accessToken, refreshToken, user } = await login(req.body);
+export const loginHandler = async (req: Request<unknown, unknown, LoginInput>, res: Response) => {
+  const { accessToken, refreshToken, user } = await login(req.body);
 
-    setRefreshTokenCookie(res, refreshToken);
+  setRefreshTokenCookie(res, refreshToken);
 
-    res.status(StatusCodes.OK).json({
-      success: true,
-      message: SUCCESS_MESSAGE.LOGIN_SUCCESS,
-      data: { accessToken, user },
-    });
-  } catch (err) {
-    next(err);
-  }
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.LOGIN_SUCCESS,
+    data: { accessToken, user },
+  });
 };
 
-export const logoutHandler = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const presentedToken = req.cookies?.refreshToken as string | undefined;
+export const logoutHandler = async (req: Request, res: Response) => {
+  const presentedToken = req.cookies?.refreshToken as string | undefined;
 
-    await logout(presentedToken);
+  await logout(presentedToken);
 
-    res.clearCookie('refreshToken', refreshCookieBaseOptions);
+  res.clearCookie('refreshToken', refreshCookieBaseOptions);
 
-    res.status(StatusCodes.OK).json({
-      success: true,
-      message: SUCCESS_MESSAGE.LOGOUT_SUCCESS,
-    });
-  } catch (err) {
-    next(err);
-  }
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.LOGOUT_SUCCESS,
+  });
 };
 
 export const forgotPasswordHandler = async (
   req: Request<unknown, unknown, ForgotPasswordInput>,
   res: Response,
-  next: NextFunction,
 ) => {
-  try {
-    await forgotPassword(req.body);
+  await forgotPassword(req.body);
 
-    res.status(StatusCodes.OK).json({
-      success: true,
-      message: SUCCESS_MESSAGE.PASSWORD_RESET_EMAIL_SENT,
-    });
-  } catch (err) {
-    next(err);
-  }
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.PASSWORD_RESET_EMAIL_SENT,
+  });
 };
 
 export const resetPasswordHandler = async (
   req: Request<unknown, unknown, ResetPasswordInput>,
   res: Response,
-  next: NextFunction,
 ) => {
-  try {
-    await resetPassword(req.body);
+  await resetPassword(req.body);
 
-    res.status(StatusCodes.OK).json({
-      success: true,
-      message: SUCCESS_MESSAGE.PASSWORD_UPDATE_SUCCESS,
-    });
-  } catch (err) {
-    next(err);
-  }
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.PASSWORD_UPDATE_SUCCESS,
+  });
 };
 
-export const refreshHandler = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const presentedToken = req.cookies?.refreshToken as string | undefined;
+export const refreshHandler = async (req: Request, res: Response) => {
+  const presentedToken = req.cookies?.refreshToken as string | undefined;
 
-    if (!presentedToken) {
-      throw AppError('No refresh token provided', StatusCodes.UNAUTHORIZED, ErrorCode.UNAUTHORIZED);
-    }
-
-    const { accessToken, refreshToken, user } = await refreshTokens(presentedToken);
-
-    setRefreshTokenCookie(res, refreshToken);
-
-    res.status(StatusCodes.OK).json({
-      success: true,
-      message: SUCCESS_MESSAGE.TOKEN_REFRESH_SUCCESS,
-      data: { accessToken, user },
-    });
-  } catch (err) {
-    next(err);
+  if (!presentedToken) {
+    throw AppError('No refresh token provided', StatusCodes.UNAUTHORIZED, ErrorCode.UNAUTHORIZED);
   }
+
+  const { accessToken, refreshToken, user } = await refreshTokens(presentedToken);
+
+  setRefreshTokenCookie(res, refreshToken);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.TOKEN_REFRESH_SUCCESS,
+    data: { accessToken, user },
+  });
 };

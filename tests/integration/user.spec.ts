@@ -1,10 +1,16 @@
 import { createApp } from '@/app';
+import type * as HelperUtil from '@/utils/helper.util';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/utils/helper.util', () => ({
-  sendEmail: vi.fn(),
-}));
+vi.mock('@/utils/helper.util', async (importOriginal) => {
+  const actual = await importOriginal<typeof HelperUtil>();
+
+  return {
+    ...actual,
+    sendEmail: vi.fn(),
+  };
+});
 
 const { sendEmail } = await import('@/utils/helper.util');
 const app = await createApp();

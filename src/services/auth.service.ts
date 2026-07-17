@@ -7,13 +7,14 @@ import {
   RESET_TOKEN_EXPIRES_IN,
   RESET_TOKEN_SECRET,
 } from '@/config/env.config';
-import redisClient from '@/config/redis.config';
+import { loginRateLimiter } from '@/config/rate-limiter.config';
 import { ErrorCode } from '@/constants/error-code';
 import { ERROR_MESSAGE } from '@/constants/message';
+import RefreshToken from '@/db/models/refresh-token.model';
 import User from '@/db/models/user.model';
 import AppError from '@/errors/AppError';
 import type { JwtPayload } from '@/middlewares/authentication.middleware';
-import { sendEmail } from '@/utils/helper.util';
+import { hashPassword, hashRefreshToken, sendEmail, verifyRefreshToken } from '@/utils/helper.util';
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -23,17 +24,6 @@ import type {
 import argon2 from 'argon2';
 import { StatusCodes } from 'http-status-codes';
 import jwt, { type SignOptions } from 'jsonwebtoken';
-import { RateLimiterRedis } from 'rate-limiter-flexible';
-
-const FIFTEEN_MINUTES_IN_SECONDS = 15 * 60;
-
-const loginRateLimiter = new RateLimiterRedis({
-  storeClient: redisClient,
-  keyPrefix: 'login_fail',
-  points: 5,
-  duration: FIFTEEN_MINUTES_IN_SECONDS,
-  blockDuration: FIFTEEN_MINUTES_IN_SECONDS,
-});
 
 const generateAuthTokens = (payload: JwtPayload) => {
   const accessToken = jwt.sign(payload, JWT_ACCESS_SECRET, {
@@ -58,7 +48,7 @@ export const signup = async (input: SignupInput) => {
     );
   }
 
-  const hashedPassword = await argon2.hash(input.password);
+  const hashedPassword = await hashPassword(input.password);
 
   const user = await User.create({
     fullName: input.fullName,
@@ -120,8 +110,11 @@ export const login = async (input: LoginInput) => {
 
   const { accessToken, refreshToken } = generateAuthTokens(payload);
 
-  user.refreshToken = await argon2.hash(refreshToken);
-  await user.save();
+  await RefreshToken.findOneAndUpdate(
+    { user: user._id },
+    { tokenHash: hashRefreshToken(refreshToken) },
+    { upsert: true },
+  );
 
   return { accessToken, refreshToken, user: payload };
 };
@@ -169,10 +162,11 @@ export const resetPassword = async (input: ResetPasswordInput) => {
     );
   }
 
-  user.password = await argon2.hash(input.newPassword);
-  // resetting the password should kill any existing sessions
-  user.refreshToken = null;
+  user.password = await hashPassword(input.newPassword);
   await user.save();
+
+  // resetting the password should kill any existing sessions
+  await RefreshToken.deleteOne({ user: user._id });
 };
 
 export const logout = async (presentedToken: string | undefined) => {
@@ -190,7 +184,7 @@ export const logout = async (presentedToken: string | undefined) => {
     return;
   }
 
-  await User.findByIdAndUpdate(decoded.id, { refreshToken: null });
+  await RefreshToken.deleteOne({ user: decoded.id });
 };
 
 export const refreshTokens = async (presentedToken: string) => {
@@ -206,9 +200,10 @@ export const refreshTokens = async (presentedToken: string) => {
     );
   }
 
-  const user = await User.findById(decoded.id).select('+refreshToken');
+  const user = await User.findById(decoded.id);
+  const storedToken = user ? await RefreshToken.findOne({ user: user._id }) : null;
 
-  if (!user || !user.refreshToken) {
+  if (!user || !storedToken) {
     throw AppError(
       ERROR_MESSAGE.INVALID_EXPIRED_TOKEN,
       StatusCodes.UNAUTHORIZED,
@@ -216,7 +211,7 @@ export const refreshTokens = async (presentedToken: string) => {
     );
   }
 
-  const isTokenValid = await argon2.verify(user.refreshToken, presentedToken);
+  const isTokenValid = verifyRefreshToken(presentedToken, storedToken.tokenHash);
 
   if (!isTokenValid) {
     throw AppError(
@@ -234,8 +229,8 @@ export const refreshTokens = async (presentedToken: string) => {
 
   const { accessToken, refreshToken } = generateAuthTokens(payload);
 
-  user.refreshToken = await argon2.hash(refreshToken);
-  await user.save();
+  storedToken.tokenHash = hashRefreshToken(refreshToken);
+  await storedToken.save();
 
   return { accessToken, refreshToken, user: payload };
 };
