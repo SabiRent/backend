@@ -63,3 +63,26 @@ export const resetPasswordSchema = z
   .openapi('ResetPasswordInput');
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const updateProfileSchema = z
+  .object({
+    fullName: z
+      .string({ error: 'Full name is required' })
+      .trim()
+      .min(2, 'Full name must be at least 2 characters')
+      .openapi({ example: 'Jane Doe' }),
+  })
+  .openapi('UpdateProfileInput');
+
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z
+      .string({ error: 'Current password is required' })
+      .openapi({ example: 'StrongPass1' }),
+    newPassword: passwordSchema.openapi({ example: 'NewStrongPass1' }),
+  })
+  .openapi('ChangePasswordInput');
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
