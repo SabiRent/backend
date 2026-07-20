@@ -129,7 +129,7 @@ export const forgotPassword = async (input: ForgotPasswordInput) => {
     expiresIn: RESET_TOKEN_EXPIRES_IN,
   } as SignOptions);
 
-  const resetLink = `${CLIENT_URL}/reset-password?token=${resetToken}`;
+  const resetLink = `${CLIENT_URL}/auth/reset-password?token=${resetToken}`;
 
   await sendEmail({
     to: user.email,
