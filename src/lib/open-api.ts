@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '@/config/env.config';
 import { registerAuthDocs } from '@/lib/auth.docs';
 import { registry } from '@/lib/open-api-registry';
+import { registerUserDocs } from '@/lib/user.docs';
 import { OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 
 registry.registerComponent('securitySchemes', 'bearerAuth', {
@@ -15,6 +16,7 @@ const ensureDocsRegistered = () => {
   if (initialized) return;
 
   registerAuthDocs();
+  registerUserDocs();
 
   initialized = true;
 };
