@@ -3,8 +3,10 @@ import { z } from '@/lib/zod';
 import {
   forgotPasswordSchema,
   loginSchema,
+  resendVerificationSchema,
   resetPasswordSchema,
   signupSchema,
+  verifyEmailSchema,
 } from '@/validations/user.validation';
 
 const errorResponseSchema = z
@@ -43,6 +45,7 @@ const signupResponseSchema = successResponseSchema(
     fullName: z.string(),
     email: z.string(),
     role: z.string(),
+    isVerified: z.boolean(),
   }),
 );
 
@@ -61,17 +64,71 @@ export const registerAuthDocs = () => {
     method: 'post',
     path: '/api/v1/auth/signup',
     tags: ['Auth'],
-    summary: 'Create a new account',
+    summary: 'Create a new account and send an email-verification link',
     request: {
       body: { content: { 'application/json': { schema: signupSchema } } },
     },
     responses: {
       '201': {
-        description: 'Account created successfully',
+        description:
+          'Account created. A verification email is sent so the user can confirm their address before logging in. `isVerified` reflects the current state (true only when auto-verified outside production).',
         content: { 'application/json': { schema: signupResponseSchema } },
       },
       '409': {
         description: 'Email already registered',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '422': {
+        description: 'Validation error',
+        content: { 'application/json': { schema: validationErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/verify-email',
+    tags: ['Auth'],
+    summary: 'Verify an account using the token emailed at signup',
+    request: {
+      body: { content: { 'application/json': { schema: verifyEmailSchema } } },
+    },
+    responses: {
+      '200': {
+        description: 'Email verified successfully — a welcome email is sent',
+        content: { 'application/json': { schema: messageOnlyResponseSchema } },
+      },
+      '401': {
+        description: 'Invalid or expired verification token',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '409': {
+        description: 'Account is already verified',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '422': {
+        description: 'Validation error',
+        content: { 'application/json': { schema: validationErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/resend-verification',
+    tags: ['Auth'],
+    summary: 'Resend the email-verification link',
+    request: {
+      body: { content: { 'application/json': { schema: resendVerificationSchema } } },
+    },
+    responses: {
+      '200': {
+        description:
+          'Always returns this response whether or not the email is registered or already verified, to avoid leaking account existence',
+        content: { 'application/json': { schema: messageOnlyResponseSchema } },
+      },
+      '429': {
+        description: 'Too many resend requests for this email — try again later',
         content: { 'application/json': { schema: errorResponseSchema } },
       },
       '422': {
@@ -96,6 +153,10 @@ export const registerAuthDocs = () => {
       },
       '401': {
         description: 'Invalid email or password',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '403': {
+        description: 'Account is not verified or has been deactivated',
         content: { 'application/json': { schema: errorResponseSchema } },
       },
       '429': {

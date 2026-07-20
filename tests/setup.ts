@@ -1,10 +1,20 @@
 import redisClient from '@/config/redis.config';
-import { connectDB, disconnectDB } from '@/db';
+import { disconnectDB } from '@/db';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 
+let mongoServer: MongoMemoryServer | undefined;
+
 beforeAll(async () => {
-  await connectDB();
+  // Use a provided DATABASE_URL (CI / docker-compose) when present, otherwise
+  // spin up an in-memory MongoDB so the suite runs with no external services.
+  if (process.env.DATABASE_URL) {
+    await mongoose.connect(process.env.DATABASE_URL);
+  } else {
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri());
+  }
 });
 
 afterEach(async () => {
@@ -16,5 +26,6 @@ afterEach(async () => {
 
 afterAll(async () => {
   await disconnectDB();
+  await mongoServer?.stop();
   await redisClient.quit();
 });

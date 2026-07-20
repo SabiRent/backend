@@ -8,14 +8,18 @@ import {
   login,
   logout,
   refreshTokens,
+  resendVerificationEmail,
   resetPassword,
   signup,
+  verifyEmail,
 } from '@/services/auth.service';
 import type {
   ForgotPasswordInput,
   LoginInput,
+  ResendVerificationInput,
   ResetPasswordInput,
   SignupInput,
+  VerifyEmailInput,
 } from '@/validations/user.validation';
 import type { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
@@ -90,6 +94,30 @@ export const resetPasswordHandler = async (
   res.status(StatusCodes.OK).json({
     success: true,
     message: SUCCESS_MESSAGE.PASSWORD_UPDATE_SUCCESS,
+  });
+};
+
+export const verifyEmailHandler = async (
+  req: Request<unknown, unknown, VerifyEmailInput>,
+  res: Response,
+) => {
+  await verifyEmail(req.body);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.EMAIL_VERIFIED_SUCCESS,
+  });
+};
+
+export const resendVerificationHandler = async (
+  req: Request<unknown, unknown, ResendVerificationInput>,
+  res: Response,
+) => {
+  await resendVerificationEmail(req.body);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.EMAIL_VERIFICATION_SENT,
   });
 };
 

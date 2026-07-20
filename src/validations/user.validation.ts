@@ -63,3 +63,26 @@ export const resetPasswordSchema = z
   .openapi('ResetPasswordInput');
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const verifyEmailSchema = z
+  .object({
+    token: z
+      .string({ error: 'Verification token is required' })
+      .openapi({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }),
+  })
+  .openapi('VerifyEmailInput');
+
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
+export const resendVerificationSchema = z
+  .object({
+    email: z
+      .string({ error: 'Email is required' })
+      .trim()
+      .toLowerCase()
+      .email('Invalid email format')
+      .openapi({ example: 'jane@example.com' }),
+  })
+  .openapi('ResendVerificationInput');
+
+export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;

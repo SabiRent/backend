@@ -9,7 +9,7 @@ import { renderEmailTemplate } from '@/services/email-template.service';
  */
 
 export const sendWelcomeEmail = async (params: { to: string; fullName: string }) => {
-  const html = await renderEmailTemplate('welcome', { name: params.fullName });
+  const html = await renderEmailTemplate('welcome', { fullName: params.fullName });
   return enqueueEmail({
     to: params.to,
     subject: 'Welcome to MyCompound',
