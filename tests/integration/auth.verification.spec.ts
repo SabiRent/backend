@@ -1,22 +1,24 @@
 import { createApp } from '@/app';
 import { VERIFICATION_TOKEN_SECRET } from '@/config/env.config';
+import Token, { TokenType } from '@/db/models/token.model';
 import User from '@/db/models/user.model';
-import type * as HelperUtil from '@/utils/helper.util';
-import jwt from 'jsonwebtoken';
+import type * as EmailQueue from '@/queues/email.queue';
+import { generateToken, hashToken } from '@/utils/helper.util';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Never send real email in tests — mock the transport-facing helper.
-vi.mock('@/utils/helper.util', async (importOriginal) => {
-  const actual = await importOriginal<typeof HelperUtil>();
+// Never send real email in tests — auth hands emails to the queue, so stub the
+// producer. Dispatch still renders the (real) template before this no-op runs.
+vi.mock('@/queues/email.queue', async (importOriginal) => {
+  const actual = await importOriginal<typeof EmailQueue>();
 
   return {
     ...actual,
-    sendEmail: vi.fn(),
+    enqueueEmail: vi.fn(),
   };
 });
 
-const { sendEmail } = await import('@/utils/helper.util');
+const { enqueueEmail } = await import('@/queues/email.queue');
 const app = await createApp();
 
 const signupPayload = {
@@ -34,12 +36,32 @@ const login = (email: string, password: string) =>
 const setVerified = (email: string, isVerified: boolean) =>
   User.updateOne({ email }, { isVerified });
 
-const forgeVerificationToken = (id: string) =>
-  jwt.sign({ id }, VERIFICATION_TOKEN_SECRET, { expiresIn: '1d' });
-
 const userId = async (email: string) => {
   const user = await User.findOne({ email });
   return user!._id.toString();
+};
+
+// Persist a real verification token (the flow now looks up a DB record by hash,
+// not a self-contained JWT) and hand back the raw token that would go in the link.
+const issueVerificationToken = async (id: string, expiresAt = new Date(Date.now() + 60_000)) => {
+  const rawToken = generateToken();
+  await Token.create({
+    user: id,
+    tokenHash: hashToken(rawToken, VERIFICATION_TOKEN_SECRET),
+    type: TokenType.EMAIL_VERIFICATION,
+    expiresAt,
+  });
+  return rawToken;
+};
+
+const verifyRequest = (token: string) =>
+  request(app).post('/api/v1/auth/verify-email').send({ token });
+
+// The verify link is rendered into the enqueued email's HTML — pull the raw token
+// back out so tests can drive the exact link a user would click.
+const tokenFromEnqueuedEmail = (callIndex: number) => {
+  const html = vi.mocked(enqueueEmail).mock.calls[callIndex][0].html ?? '';
+  return html.match(/token=([^"'&\s]+)/)?.[1] ?? '';
 };
 
 describe('login verification gate', () => {
@@ -84,23 +106,23 @@ describe('POST /api/v1/auth/verify-email', () => {
   });
 
   it('verifies the account with a valid token and sends a welcome email', async () => {
-    const token = forgeVerificationToken(await userId(signupPayload.email));
+    const token = await issueVerificationToken(await userId(signupPayload.email));
 
-    const res = await request(app).post('/api/v1/auth/verify-email').send({ token });
+    const res = await verifyRequest(token);
 
     expect(res.status).toBe(200);
 
     const user = await User.findOne({ email: signupPayload.email });
     expect(user!.isVerified).toBe(true);
 
-    // welcome email is sent on successful verification
-    expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(sendEmail).mock.calls[0][0].template).toBe('welcome.temp.ejs');
+    // welcome email is enqueued on successful verification
+    expect(enqueueEmail).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(enqueueEmail).mock.calls[0][0].subject).toBe('Welcome to MyCompound');
   });
 
   it('lets the user log in after verifying', async () => {
-    const token = forgeVerificationToken(await userId(signupPayload.email));
-    await request(app).post('/api/v1/auth/verify-email').send({ token });
+    const token = await issueVerificationToken(await userId(signupPayload.email));
+    await verifyRequest(token);
 
     const res = await login(signupPayload.email, signupPayload.password);
 
@@ -108,19 +130,61 @@ describe('POST /api/v1/auth/verify-email', () => {
   });
 
   it('rejects an invalid token with 401', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/verify-email')
-      .send({ token: 'garbage.invalid.token' });
+    const res = await verifyRequest('garbage.invalid.token');
 
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('INVALID_EXPIRED_TOKEN');
   });
 
+  it('rejects an expired token with 401', async () => {
+    const token = await issueVerificationToken(
+      await userId(signupPayload.email),
+      new Date(Date.now() - 1_000),
+    );
+
+    const res = await verifyRequest(token);
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('INVALID_EXPIRED_TOKEN');
+  });
+
+  it('is single-use — the same token cannot verify twice', async () => {
+    const token = await issueVerificationToken(await userId(signupPayload.email));
+
+    const first = await verifyRequest(token);
+    expect(first.status).toBe(200);
+
+    // account is verified and the token is consumed; a replay finds no record
+    const second = await verifyRequest(token);
+    expect(second.status).toBe(401);
+    expect(second.body.error.code).toBe('INVALID_EXPIRED_TOKEN');
+  });
+
+  it('invalidates the previous link when a new verification token is issued', async () => {
+    // drive the real issue path (resend) twice so the second supersedes the first
+    const resend = () =>
+      request(app).post('/api/v1/auth/resend-verification').send({ email: signupPayload.email });
+
+    await resend();
+    const firstToken = tokenFromEnqueuedEmail(0);
+
+    await resend();
+    const secondToken = tokenFromEnqueuedEmail(1);
+
+    // the superseded link no longer works...
+    const stale = await verifyRequest(firstToken);
+    expect(stale.status).toBe(401);
+
+    // ...only the most recently issued one does
+    const fresh = await verifyRequest(secondToken);
+    expect(fresh.status).toBe(200);
+  });
+
   it('rejects an already-verified account with 409', async () => {
     await setVerified(signupPayload.email, true);
-    const token = forgeVerificationToken(await userId(signupPayload.email));
+    const token = await issueVerificationToken(await userId(signupPayload.email));
 
-    const res = await request(app).post('/api/v1/auth/verify-email').send({ token });
+    const res = await verifyRequest(token);
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('USER_ALREADY_VERIFIED');
@@ -147,8 +211,8 @@ describe('POST /api/v1/auth/resend-verification', () => {
       .send({ email: signupPayload.email });
 
     expect(res.status).toBe(200);
-    expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(sendEmail).mock.calls[0][0].template).toBe('verify-email.temp.ejs');
+    expect(enqueueEmail).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(enqueueEmail).mock.calls[0][0].subject).toBe('Verify your email');
   });
 
   it('sends nothing for an already-verified account, but returns the same 200', async () => {
@@ -159,7 +223,7 @@ describe('POST /api/v1/auth/resend-verification', () => {
       .send({ email: signupPayload.email });
 
     expect(res.status).toBe(200);
-    expect(sendEmail).not.toHaveBeenCalled();
+    expect(enqueueEmail).not.toHaveBeenCalled();
   });
 
   it('sends nothing for an unregistered email, but returns the same 200 (no enumeration)', async () => {
@@ -168,7 +232,7 @@ describe('POST /api/v1/auth/resend-verification', () => {
       .send({ email: 'nobody@example.com' });
 
     expect(res.status).toBe(200);
-    expect(sendEmail).not.toHaveBeenCalled();
+    expect(enqueueEmail).not.toHaveBeenCalled();
   });
 
   it('rate-limits after 3 resends for the same email', async () => {

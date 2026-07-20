@@ -1,18 +1,20 @@
 import { createApp } from '@/app';
-import type * as HelperUtil from '@/utils/helper.util';
+import type * as EmailQueue from '@/queues/email.queue';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/utils/helper.util', async (importOriginal) => {
-  const actual = await importOriginal<typeof HelperUtil>();
+// Auth hands emails to the queue — stub the producer so no real SMTP happens.
+// Dispatch still renders the (real) template before this no-op runs.
+vi.mock('@/queues/email.queue', async (importOriginal) => {
+  const actual = await importOriginal<typeof EmailQueue>();
 
   return {
     ...actual,
-    sendEmail: vi.fn(),
+    enqueueEmail: vi.fn(),
   };
 });
 
-const { sendEmail } = await import('@/utils/helper.util');
+const { enqueueEmail } = await import('@/queues/email.queue');
 const app = await createApp();
 
 const signupPayload = {
@@ -170,7 +172,7 @@ describe('POST /api/v1/auth/forgot-password', () => {
       .send({ email: signupPayload.email });
 
     expect(res.status).toBe(200);
-    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(enqueueEmail).toHaveBeenCalledTimes(1);
   });
 
   it('returns the identical response for an unregistered email, sending nothing', async () => {
@@ -179,7 +181,7 @@ describe('POST /api/v1/auth/forgot-password', () => {
       .send({ email: 'nobody@example.com' });
 
     expect(res.status).toBe(200);
-    expect(sendEmail).not.toHaveBeenCalled();
+    expect(enqueueEmail).not.toHaveBeenCalled();
   });
 });
 
@@ -200,9 +202,10 @@ describe('POST /api/v1/auth/reset-password', () => {
       .post('/api/v1/auth/forgot-password')
       .send({ email: signupPayload.email });
 
-    const mockCall = vi.mocked(sendEmail).mock.calls[0][0];
-    const resetLink = mockCall.data.resetLink as string;
-    const resetToken = resetLink.split('token=')[1];
+    // The reset link is rendered into the email HTML by the dispatch layer;
+    // pull the token back out of the enqueued job's body.
+    const enqueuedHtml = vi.mocked(enqueueEmail).mock.calls[0][0].html ?? '';
+    const resetToken = enqueuedHtml.match(/token=([^"'&\s]+)/)?.[1];
 
     const resetRes = await request(app)
       .post('/api/v1/auth/reset-password')
@@ -227,5 +230,26 @@ describe('POST /api/v1/auth/reset-password', () => {
 
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('INVALID_EXPIRED_TOKEN');
+  });
+
+  it('is single-use — a reset token cannot be replayed', async () => {
+    await request(app)
+      .post('/api/v1/auth/forgot-password')
+      .send({ email: signupPayload.email });
+
+    const enqueuedHtml = vi.mocked(enqueueEmail).mock.calls[0][0].html ?? '';
+    const resetToken = enqueuedHtml.match(/token=([^"'&\s]+)/)?.[1];
+
+    const first = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({ token: resetToken, newPassword: 'NewStrongPass1' });
+    expect(first.status).toBe(200);
+
+    // the token was consumed on first use — a second attempt finds no record
+    const second = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({ token: resetToken, newPassword: 'AnotherPass1' });
+    expect(second.status).toBe(401);
+    expect(second.body.error.code).toBe('INVALID_EXPIRED_TOKEN');
   });
 });

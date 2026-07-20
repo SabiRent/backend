@@ -8,6 +8,23 @@ import { renderEmailTemplate } from '@/services/email-template.service';
  * decoupled from auth — a caller just supplies a name / email / token.
  */
 
+export const sendVerificationEmail = async (params: {
+  to: string;
+  fullName: string;
+  token: string;
+}) => {
+  const verifyLink = `${CLIENT_URL}/verify-email?token=${params.token}`;
+  const html = await renderEmailTemplate('verify-email', {
+    fullName: params.fullName,
+    verifyLink,
+  });
+  return enqueueEmail({
+    to: params.to,
+    subject: 'Verify your email',
+    html,
+  });
+};
+
 export const sendWelcomeEmail = async (params: { to: string; fullName: string }) => {
   const html = await renderEmailTemplate('welcome', { fullName: params.fullName });
   return enqueueEmail({

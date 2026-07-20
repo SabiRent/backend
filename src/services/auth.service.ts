@@ -1,5 +1,4 @@
 import {
-  CLIENT_URL,
   JWT_ACCESS_EXPIRES_IN,
   JWT_ACCESS_SECRET,
   JWT_REFRESH_EXPIRES_IN,
@@ -17,10 +16,23 @@ import { NodeEnv } from '@/constants';
 import { ErrorCode } from '@/constants/error-code';
 import { ERROR_MESSAGE } from '@/constants/message';
 import RefreshToken from '@/db/models/refresh-token.model';
+import Token, { TokenType } from '@/db/models/token.model';
 import User from '@/db/models/user.model';
 import AppError from '@/errors/AppError';
 import type { JwtPayload } from '@/middlewares/authentication.middleware';
-import { hashPassword, hashRefreshToken, sendEmail, verifyRefreshToken } from '@/utils/helper.util';
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail as dispatchVerificationEmail,
+  sendWelcomeEmail,
+} from '@/services/email.dispatch';
+import {
+  generateToken,
+  hashPassword,
+  hashRefreshToken,
+  hashToken,
+  parseDuration,
+  verifyRefreshToken,
+} from '@/utils/helper.util';
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -45,25 +57,65 @@ const generateAuthTokens = (payload: JwtPayload) => {
   return { accessToken, refreshToken };
 };
 
-const sendVerificationEmail = async (userId: string, email: string, fullName: string) => {
-  const verificationToken = jwt.sign({ id: userId }, VERIFICATION_TOKEN_SECRET, {
-    expiresIn: VERIFICATION_TOKEN_EXPIRES_IN,
-  } as SignOptions);
+/**
+ * Mint a single-use token, persisting only its hash with an expiry. Any earlier
+ * token of the same kind for this user is dropped first, so requesting a fresh
+ * link (e.g. resend-verification) invalidates the previous one — the server, not
+ * just the token's own expiry, decides which link is live.
+ */
+const issueToken = async (userId: string, type: TokenType, secret: string, duration: string) => {
+  const rawToken = generateToken();
 
-  const verifyLink = `${CLIENT_URL}/verify-email?token=${verificationToken}`;
+  await Token.deleteMany({ user: userId, type });
+
+  await Token.create({
+    user: userId,
+    tokenHash: hashToken(rawToken, secret),
+    type,
+    expiresAt: new Date(Date.now() + parseDuration(duration)),
+  });
+
+  return rawToken;
+};
+
+/**
+ * Look up the record for a presented raw token. Returns null (and cleans up) when
+ * it's unknown or expired — the caller consumes the returned record with
+ * `deleteOne()` to make it single-use.
+ */
+const findValidToken = async (rawToken: string, type: TokenType, secret: string) => {
+  const record = await Token.findOne({ tokenHash: hashToken(rawToken, secret), type });
+
+  if (!record) return null;
+
+  // TTL cleanup is only a periodic background sweep, so an expired record may
+  // still be present — reject it and remove it now.
+  if (record.expiresAt.getTime() < Date.now()) {
+    await record.deleteOne();
+    return null;
+  }
+
+  return record;
+};
+
+const sendVerificationEmail = async (userId: string, email: string, fullName: string) => {
+  const verificationToken = await issueToken(
+    userId,
+    TokenType.EMAIL_VERIFICATION,
+    VERIFICATION_TOKEN_SECRET,
+    VERIFICATION_TOKEN_EXPIRES_IN,
+  );
 
   try {
-    await sendEmail({
-      to: email,
-      subject: 'Verify your email',
-      template: 'verify-email.temp.ejs',
-      data: { fullName, verifyLink },
-    });
+    // Hand the email to the queue and return immediately — SMTP delivery happens
+    // in the worker, off the request path, with BullMQ retries on transient
+    // failures. Enqueue itself only fails if Redis is unreachable.
+    await dispatchVerificationEmail({ to: email, fullName, token: verificationToken });
   } catch (err) {
-    // The account is already created — don't fail signup over a transient mail
+    // The account is already created — don't fail signup over a transient queue
     // issue. The user can request a fresh verification email later.
     logger.error(
-      `Failed to send verification email to ${email}: ${err instanceof Error ? err.message : err}`,
+      `Failed to enqueue verification email to ${email}: ${err instanceof Error ? err.message : err}`,
     );
   }
 };
@@ -107,11 +159,13 @@ export const signup = async (input: SignupInput) => {
 };
 
 export const verifyEmail = async (input: VerifyEmailInput) => {
-  let decoded: { id: string };
+  const record = await findValidToken(
+    input.token,
+    TokenType.EMAIL_VERIFICATION,
+    VERIFICATION_TOKEN_SECRET,
+  );
 
-  try {
-    decoded = jwt.verify(input.token, VERIFICATION_TOKEN_SECRET) as { id: string };
-  } catch {
+  if (!record) {
     throw AppError(
       ERROR_MESSAGE.INVALID_EXPIRED_TOKEN,
       StatusCodes.UNAUTHORIZED,
@@ -119,9 +173,11 @@ export const verifyEmail = async (input: VerifyEmailInput) => {
     );
   }
 
-  const user = await User.findById(decoded.id);
+  const user = await User.findById(record.user);
 
   if (!user) {
+    // orphaned token (user deleted) — consume it and reject uniformly
+    await record.deleteOne();
     throw AppError(
       ERROR_MESSAGE.INVALID_EXPIRED_TOKEN,
       StatusCodes.UNAUTHORIZED,
@@ -130,6 +186,7 @@ export const verifyEmail = async (input: VerifyEmailInput) => {
   }
 
   if (user.isVerified) {
+    await record.deleteOne();
     throw AppError(
       ERROR_MESSAGE.USER_ALREADY_VERIFIED,
       StatusCodes.CONFLICT,
@@ -140,18 +197,16 @@ export const verifyEmail = async (input: VerifyEmailInput) => {
   user.isVerified = true;
   await user.save();
 
+  // single-use: the token can't be replayed once it has verified the account
+  await record.deleteOne();
+
   // Welcome the user now that their email is confirmed. Best-effort — verification
   // has already succeeded, so a failed welcome email must not fail the request.
   try {
-    await sendEmail({
-      to: user.email,
-      subject: 'Welcome to MyCompound',
-      template: 'welcome.temp.ejs',
-      data: { fullName: user.fullName },
-    });
+    await sendWelcomeEmail({ to: user.email, fullName: user.fullName });
   } catch (err) {
     logger.error(
-      `Failed to send welcome email to ${user.email}: ${err instanceof Error ? err.message : err}`,
+      `Failed to enqueue welcome email to ${user.email}: ${err instanceof Error ? err.message : err}`,
     );
   }
 };
@@ -252,26 +307,20 @@ export const forgotPassword = async (input: ForgotPasswordInput) => {
   // don't reveal whether the email is registered — always resolve the same way
   if (!user) return;
 
-  const resetToken = jwt.sign({ id: user._id.toString() }, RESET_TOKEN_SECRET, {
-    expiresIn: RESET_TOKEN_EXPIRES_IN,
-  } as SignOptions);
+  const resetToken = await issueToken(
+    user._id.toString(),
+    TokenType.PASSWORD_RESET,
+    RESET_TOKEN_SECRET,
+    RESET_TOKEN_EXPIRES_IN,
+  );
 
-  const resetLink = `${CLIENT_URL}/reset-password?token=${resetToken}`;
-
-  await sendEmail({
-    to: user.email,
-    subject: 'Reset your password',
-    template: 'reset-password.temp.ejs',
-    data: { fullName: user.fullName, resetLink },
-  });
+  await sendPasswordResetEmail({ to: user.email, fullName: user.fullName, token: resetToken });
 };
 
 export const resetPassword = async (input: ResetPasswordInput) => {
-  let decoded: { id: string };
+  const record = await findValidToken(input.token, TokenType.PASSWORD_RESET, RESET_TOKEN_SECRET);
 
-  try {
-    decoded = jwt.verify(input.token, RESET_TOKEN_SECRET) as { id: string };
-  } catch {
+  if (!record) {
     throw AppError(
       ERROR_MESSAGE.INVALID_EXPIRED_TOKEN,
       StatusCodes.UNAUTHORIZED,
@@ -279,9 +328,10 @@ export const resetPassword = async (input: ResetPasswordInput) => {
     );
   }
 
-  const user = await User.findById(decoded.id);
+  const user = await User.findById(record.user);
 
   if (!user) {
+    await record.deleteOne();
     throw AppError(
       ERROR_MESSAGE.INVALID_EXPIRED_TOKEN,
       StatusCodes.UNAUTHORIZED,
@@ -291,6 +341,9 @@ export const resetPassword = async (input: ResetPasswordInput) => {
 
   user.password = await hashPassword(input.newPassword);
   await user.save();
+
+  // single-use: consume the token so it can't reset the password twice
+  await record.deleteOne();
 
   // resetting the password should kill any existing sessions
   await RefreshToken.deleteOne({ user: user._id });

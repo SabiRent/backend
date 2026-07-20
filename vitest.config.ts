@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
@@ -7,13 +6,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    // Route the Redis config to an in-memory ioredis-mock during tests so the
-    // suite never touches a real Redis (rate limiter + flushdb stay isolated).
-    alias: {
-      '@/config/redis.config': fileURLToPath(
-        new URL('./tests/mocks/redis.config.ts', import.meta.url),
-      ),
-    },
+    // Tests run against real MongoDB + Redis (docker-compose locally, service
+    // containers in CI) — see tests/setup.ts. No infrastructure is mocked.
     include: ['tests/**/*.spec.ts'],
     setupFiles: ['./tests/setup.ts'],
     // integration tests share one Mongo/Redis instance — running spec files in
