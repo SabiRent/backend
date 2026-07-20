@@ -22,7 +22,7 @@ export const sendPasswordResetEmail = async (params: {
   fullName: string;
   token: string;
 }) => {
-  const resetLink = `${CLIENT_URL}/reset-password?token=${params.token}`;
+  const resetLink = `${CLIENT_URL}/auth/reset-password?token=${params.token}`;
   const html = await renderEmailTemplate('reset-password', {
     fullName: params.fullName,
     resetLink,
