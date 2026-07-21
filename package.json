@@ -8,7 +8,8 @@
     "worker:dev": "tsx watch src/worker.ts",
     "worker:start": "node dist/worker.mjs",
     "build": "tsdown",
-    "start": "node dist/server.mjs",
+    "server:start": "node dist/server.mjs",
+    "start": "concurrently -k \"npm:server:start\" \"npm:worker:start\"",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch --preserveWatchOutput",
     "lint": "eslint src",
@@ -34,6 +35,7 @@
     "bullmq": "^5.77.2",
     "cloudinary": "^2.10.0",
     "compression": "^1.8.1",
+    "concurrently": "^10.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -50,9 +52,9 @@
     "pino-http": "^11.0.0",
     "rate-limiter-flexible": "^11.1.0",
     "swagger-ui-express": "^5.0.1",
+    "tsdown": "^0.22.1",
     "validator": "^13.15.35",
-    "zod": "^4.4.3",
-    "tsdown": "^0.22.1"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
@@ -81,5 +83,8 @@
     "typescript-eslint": "^8.59.3",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.6"
+  },
+  "overrides": {
+    "shell-quote": "^1.9.0"
   }
 }
