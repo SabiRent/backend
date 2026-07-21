@@ -1,7 +1,5 @@
 import { createApp } from '@/app';
-import { RESET_TOKEN_SECRET } from '@/config/env.config';
 import type * as EmailQueue from '@/queues/email.queue';
-import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -199,8 +197,7 @@ describe('POST /api/v1/auth/reset-password', () => {
       password: 'StrongPass1',
     };
 
-    const signupRes = await request(app).post('/api/v1/auth/signup').send(resetUser);
-    const userId = signupRes.body.data.id as string;
+    await request(app).post('/api/v1/auth/signup').send(resetUser);
 
     const agent = request.agent(app);
     await agent.post('/api/v1/auth/login').send({
@@ -208,7 +205,12 @@ describe('POST /api/v1/auth/reset-password', () => {
       password: resetUser.password,
     });
 
-    const resetToken = jwt.sign({ id: userId }, RESET_TOKEN_SECRET);
+    await request(app).post('/api/v1/auth/forgot-password').send({ email: resetUser.email });
+
+    // The reset link is rendered into the email HTML by the queue producer;
+    // pull the token back out of the enqueued job's body.
+    const enqueuedHtml = vi.mocked(enqueueEmail).mock.calls[0][0].html ?? '';
+    const resetToken = enqueuedHtml.match(/token=([^"'&\s]+)/)?.[1];
 
     const resetRes = await request(app)
       .post('/api/v1/auth/reset-password')

@@ -6,6 +6,7 @@ const TEMPLATES_DIR = path.join(process.cwd(), 'templates');
 export const TEMPLATE_FILES = {
   welcome: 'welcome.temp.ejs',
   resetPassword: 'reset-password.temp.ejs',
+  verifyEmail: 'verify-email.temp.ejs',
 } as const;
 
 export type EmailTemplate = keyof typeof TEMPLATE_FILES;

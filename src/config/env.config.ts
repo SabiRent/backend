@@ -34,6 +34,16 @@ export const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || 'reset_secre
 export const RESET_TOKEN_EXPIRES_IN = process.env.RESET_TOKEN_EXPIRES_IN || '15m';
 export const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
+// Email Verification
+export const VERIFICATION_TOKEN_SECRET =
+  process.env.VERIFICATION_TOKEN_SECRET || 'verification_secret';
+export const VERIFICATION_TOKEN_EXPIRES_IN = process.env.VERIFICATION_TOKEN_EXPIRES_IN || '1d';
+// Dev convenience: when true AND not in production, new accounts are auto-verified
+// on signup (the email link is skipped). Needed because Resend can only deliver to
+// the account owner until the sending domain is verified, so test users would
+// otherwise never receive a verification email. Never takes effect in production.
+export const SHOULD_VERIFY_USER = process.env.SHOULD_VERIFY_USER === 'true';
+
 // File storage
 export const FILE_STORAGE_PROVIDER = process.env.FILE_STORAGE_PROVIDER || 'cloudinary';
 export const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB) || 5;
