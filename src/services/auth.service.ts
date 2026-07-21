@@ -14,7 +14,9 @@ import RefreshToken from '@/db/models/refresh-token.model';
 import User from '@/db/models/user.model';
 import AppError from '@/errors/AppError';
 import type { JwtPayload } from '@/middlewares/authentication.middleware';
-import { hashPassword, hashRefreshToken, sendEmail, verifyRefreshToken } from '@/utils/helper.util';
+import { enqueueEmail } from '@/queues/email.queue';
+import { renderEmailTemplate } from '@/services/email-template.service';
+import { hashPassword, hashRefreshToken, verifyRefreshToken } from '@/utils/helper.util';
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -131,11 +133,15 @@ export const forgotPassword = async (input: ForgotPasswordInput) => {
 
   const resetLink = `${CLIENT_URL}/auth/reset-password?token=${resetToken}`;
 
-  await sendEmail({
-    to: user.email,
+  const mailContent = await renderEmailTemplate('resetPassword', {
+    fullName: user.fullName,
+    resetLink,
+  });
+
+  await enqueueEmail({
     subject: 'Reset your password',
-    template: 'reset-password.temp.ejs',
-    data: { fullName: user.fullName, resetLink },
+    html: mailContent,
+    to: user.email,
   });
 };
 
