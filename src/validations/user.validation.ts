@@ -68,7 +68,7 @@ export const verifyEmailSchema = z
   .object({
     token: z
       .string({ error: 'Verification token is required' })
-      .openapi({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }),
+      .openapi({ example: 'a1b2c3d4e5f6...' }),
   })
   .openapi('VerifyEmailInput');
 
@@ -86,3 +86,26 @@ export const resendVerificationSchema = z
   .openapi('ResendVerificationInput');
 
 export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
+
+export const updateProfileSchema = z
+  .object({
+    fullName: z
+      .string({ error: 'Full name is required' })
+      .trim()
+      .min(2, 'Full name must be at least 2 characters')
+      .openapi({ example: 'Jane Doe' }),
+  })
+  .openapi('UpdateProfileInput');
+
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z
+      .string({ error: 'Current password is required' })
+      .openapi({ example: 'StrongPass1' }),
+    newPassword: passwordSchema.openapi({ example: 'NewStrongPass1' }),
+  })
+  .openapi('ChangePasswordInput');
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

@@ -1,6 +1,7 @@
 import { createApp } from '@/app';
 import { NODE_ENV, PORT } from '@/config/env.config';
 import logger from '@/config/logger.config';
+import redisClient from '@/config/redis.config';
 import { NodeEnv } from '@/constants';
 import { connectDB, disconnectDB } from '@/db';
 
@@ -20,6 +21,7 @@ async function bootstrap() {
 
     server.close(async () => {
       await disconnectDB();
+      await redisClient.quit();
       logger.info('Server closed');
       process.exit(0);
     });

@@ -1,4 +1,10 @@
 import { registry } from '@/lib/open-api-registry';
+import {
+  errorResponseSchema,
+  messageOnlyResponseSchema,
+  successResponseSchema,
+  validationErrorResponseSchema,
+} from '@/lib/response.docs';
 import { z } from '@/lib/zod';
 import {
   forgotPasswordSchema,
@@ -9,34 +15,11 @@ import {
   verifyEmailSchema,
 } from '@/validations/user.validation';
 
-const errorResponseSchema = z
-  .object({
-    success: z.literal(false),
-    error: z.object({
-      message: z.string(),
-      code: z.string(),
-    }),
-  })
-  .openapi('ErrorResponse');
-
-const validationErrorResponseSchema = z
-  .object({
-    success: z.literal(false),
-    errors: z.record(z.string(), z.string()),
-  })
-  .openapi('ValidationErrorResponse');
-
 const authUserSchema = z.object({
   id: z.string(),
   email: z.string(),
   role: z.string(),
 });
-
-const successResponseSchema = <T extends z.ZodTypeAny>(name: string, dataSchema?: T) =>
-  (dataSchema
-    ? z.object({ success: z.literal(true), message: z.string(), data: dataSchema })
-    : z.object({ success: z.literal(true), message: z.string() })
-  ).openapi(name);
 
 const signupResponseSchema = successResponseSchema(
   'SignupResponse',
@@ -56,8 +39,6 @@ const authTokenResponseSchema = successResponseSchema(
     user: authUserSchema,
   }),
 );
-
-const messageOnlyResponseSchema = successResponseSchema('MessageOnlyResponse');
 
 export const registerAuthDocs = () => {
   registry.registerPath({

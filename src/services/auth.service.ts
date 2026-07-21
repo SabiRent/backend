@@ -1,4 +1,5 @@
 import {
+  CLIENT_URL,
   JWT_ACCESS_EXPIRES_IN,
   JWT_ACCESS_SECRET,
   JWT_REFRESH_EXPIRES_IN,
@@ -20,11 +21,8 @@ import Token, { TokenType } from '@/db/models/token.model';
 import User from '@/db/models/user.model';
 import AppError from '@/errors/AppError';
 import type { JwtPayload } from '@/middlewares/authentication.middleware';
-import {
-  sendPasswordResetEmail,
-  sendVerificationEmail as dispatchVerificationEmail,
-  sendWelcomeEmail,
-} from '@/services/email.dispatch';
+import { enqueueEmail } from '@/queues/email.queue';
+import { renderEmailTemplate } from '@/services/email-template.service';
 import {
   generateToken,
   hashPassword,
@@ -99,18 +97,20 @@ const findValidToken = async (rawToken: string, type: TokenType, secret: string)
 };
 
 const sendVerificationEmail = async (userId: string, email: string, fullName: string) => {
-  const verificationToken = await issueToken(
+  const rawToken = await issueToken(
     userId,
     TokenType.EMAIL_VERIFICATION,
     VERIFICATION_TOKEN_SECRET,
     VERIFICATION_TOKEN_EXPIRES_IN,
   );
 
+  const verifyLink = `${CLIENT_URL}/auth/verify-email?token=${rawToken}`;
+
   try {
-    // Hand the email to the queue and return immediately — SMTP delivery happens
-    // in the worker, off the request path, with BullMQ retries on transient
-    // failures. Enqueue itself only fails if Redis is unreachable.
-    await dispatchVerificationEmail({ to: email, fullName, token: verificationToken });
+    // Render + hand the email to the queue; SMTP delivery happens in the worker,
+    // off the request path, with BullMQ retries. Enqueue only fails if Redis is down.
+    const html = await renderEmailTemplate('verifyEmail', { fullName, verifyLink });
+    await enqueueEmail({ subject: 'Verify your email', html, to: email });
   } catch (err) {
     // The account is already created — don't fail signup over a transient queue
     // issue. The user can request a fresh verification email later.
@@ -203,7 +203,8 @@ export const verifyEmail = async (input: VerifyEmailInput) => {
   // Welcome the user now that their email is confirmed. Best-effort — verification
   // has already succeeded, so a failed welcome email must not fail the request.
   try {
-    await sendWelcomeEmail({ to: user.email, fullName: user.fullName });
+    const html = await renderEmailTemplate('welcome', { fullName: user.fullName });
+    await enqueueEmail({ subject: 'Welcome to MyCompound', html, to: user.email });
   } catch (err) {
     logger.error(
       `Failed to enqueue welcome email to ${user.email}: ${err instanceof Error ? err.message : err}`,
@@ -314,7 +315,18 @@ export const forgotPassword = async (input: ForgotPasswordInput) => {
     RESET_TOKEN_EXPIRES_IN,
   );
 
-  await sendPasswordResetEmail({ to: user.email, fullName: user.fullName, token: resetToken });
+  const resetLink = `${CLIENT_URL}/auth/reset-password?token=${resetToken}`;
+
+  const mailContent = await renderEmailTemplate('resetPassword', {
+    fullName: user.fullName,
+    resetLink,
+  });
+
+  await enqueueEmail({
+    subject: 'Reset your password',
+    html: mailContent,
+    to: user.email,
+  });
 };
 
 export const resetPassword = async (input: ResetPasswordInput) => {

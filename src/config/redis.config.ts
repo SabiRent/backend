@@ -1,4 +1,5 @@
 import { REDIS_URL } from '@/config/env.config';
+import logger from '@/config/logger.config';
 import type { ConnectionOptions } from 'bullmq';
 import Redis from 'ioredis';
 
@@ -29,6 +30,18 @@ export const redisConnection: ConnectionOptions = {
  */
 const redisClient = new Redis(REDIS_URL, {
   enableOfflineQueue: false,
+});
+
+redisClient.on('connect', () => {
+  logger.info('Redis client connected successfully');
+});
+
+redisClient.on('error', (err) => {
+  logger.error(`Redis client error: ${err.message}`);
+});
+
+redisClient.on('close', () => {
+  logger.info('Redis client connection closed');
 });
 
 export default redisClient;
