@@ -1,28 +1,6 @@
-import { JWT_REFRESH_SECRET, MAIL_FROM } from '@/config/env.config';
-import transporter from '@/config/mail.config';
+import { JWT_REFRESH_SECRET } from '@/config/env.config';
 import argon2 from 'argon2';
-import ejs from 'ejs';
 import crypto from 'node:crypto';
-import path from 'node:path';
-
-interface SendEmailOptions {
-  to: string;
-  subject: string;
-  template: string;
-  data: Record<string, unknown>;
-}
-
-export const sendEmail = async ({ to, subject, template, data }: SendEmailOptions) => {
-  const templatePath = path.join(import.meta.dirname, '..', 'templates', template);
-  const html = await ejs.renderFile(templatePath, data);
-
-  await transporter.sendMail({
-    from: MAIL_FROM,
-    to,
-    subject,
-    html: html as string,
-  });
-};
 
 // pinned explicitly so a future argon2 upgrade can't silently change hashing strength
 const PASSWORD_HASH_OPTIONS: argon2.Options = {
@@ -45,4 +23,37 @@ export const verifyRefreshToken = (token: string, hash: string) => {
   const stored = Buffer.from(hash);
 
   return candidate.length === stored.length && crypto.timingSafeEqual(candidate, stored);
+};
+
+// A high-entropy, URL-safe token for one-time links (email verification, password
+// reset). Random rather than a JWT so the server holds the authority: the token
+// only "exists" while its hash is in the DB, so it can be invalidated and consumed.
+export const generateToken = () => crypto.randomBytes(32).toString('hex');
+
+// Store/compare tokens by their keyed HMAC — a DB leak can't be reversed into a
+// usable token without the secret. Deterministic, so lookup is a plain equality
+// match on the indexed hash.
+export const hashToken = (token: string, secret: string) =>
+  crypto.createHmac('sha256', secret).update(token).digest('hex');
+
+const DURATION_UNITS: Record<string, number> = {
+  ms: 1,
+  s: 1_000,
+  m: 60_000,
+  h: 3_600_000,
+  d: 86_400_000,
+  w: 604_800_000,
+};
+
+// Converts a short duration string ("15m", "1d", "7d", or a bare number of ms)
+// into milliseconds, so a token's `expiresAt` can be derived from the same
+// *_EXPIRES_IN env strings the JWT signer already consumes.
+export const parseDuration = (value: string): number => {
+  const match = /^(\d+)\s*(ms|s|m|h|d|w)?$/.exec(value.trim());
+
+  if (!match) {
+    throw new Error(`Invalid duration: "${value}"`);
+  }
+
+  return Number(match[1]) * DURATION_UNITS[match[2] ?? 'ms'];
 };

@@ -1,24 +1,36 @@
 import { createApp } from '@/app';
 import User from '@/db/models/user.model';
-import type * as CloudinaryUtil from '@/utils/cloudinary.util';
+import type * as StorageService from '@/services/storage';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/utils/cloudinary.util', async (importOriginal) => {
-  const actual = await importOriginal<typeof CloudinaryUtil>();
+vi.mock('@/services/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof StorageService>();
+
+  // A single stable object, not a fresh one per call — property.service.ts calls
+  // getStorageAdapter() separately for upload and delete, and the call-count
+  // assertions below need both calls landing on the same mock functions.
+  const mockAdapter = {
+    provider: 'cloudinary',
+    upload: vi.fn(async () => ({
+      providerFileId: 'properties/mock',
+      url: 'https://res.cloudinary.com/test/image/upload/mock.png',
+      metadata: { resourceType: 'image', deliveryType: 'upload' },
+    })),
+    getPublicUrl: vi.fn(),
+    getSignedUrl: vi.fn(),
+    delete: vi.fn(async () => undefined),
+  };
 
   return {
     ...actual,
-    uploadImageBuffer: vi.fn(async () => ({
-      secureUrl: 'https://res.cloudinary.com/test/image/upload/mock.png',
-      publicId: 'properties/mock',
-    })),
-    deleteImage: vi.fn(async () => undefined),
+    getStorageAdapter: vi.fn(() => mockAdapter),
   };
 });
 
-const { uploadImageBuffer, deleteImage } = await import('@/utils/cloudinary.util');
+const { getStorageAdapter } = await import('@/services/storage');
+const mockAdapter = getStorageAdapter();
 
 const app = await createApp();
 
@@ -104,7 +116,7 @@ describe('POST /api/v1/properties', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.image).toBe('https://res.cloudinary.com/test/image/upload/mock.png');
-    expect(uploadImageBuffer).toHaveBeenCalledTimes(1);
+    expect(mockAdapter.upload).toHaveBeenCalledTimes(1);
   });
 
   it('rejects an unsupported file type', async () => {
@@ -116,7 +128,7 @@ describe('POST /api/v1/properties', () => {
       'notes.txt',
     );
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(415);
   });
 
   it('rejects a request with no access token', async () => {
@@ -273,7 +285,7 @@ describe('PATCH /api/v1/properties/:id', () => {
       .attach('image', Buffer.from('b'), 'b.png');
 
     expect(res.status).toBe(200);
-    expect(deleteImage).toHaveBeenCalledTimes(1);
+    expect(mockAdapter.delete).toHaveBeenCalledTimes(1);
   });
 
   it('blocks a non-owner from updating', async () => {

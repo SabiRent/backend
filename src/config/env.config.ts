@@ -26,13 +26,29 @@ export const MAIL_USER = process.env.MAIL_USER || '';
 export const MAIL_PASS = process.env.MAIL_PASS || '';
 export const MAIL_FROM = process.env.MAIL_FROM || '';
 
+// Redis (BullMQ) — used by the async email queue/worker
+export const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+
 // Reset Password
 export const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || 'reset_secret';
 export const RESET_TOKEN_EXPIRES_IN = process.env.RESET_TOKEN_EXPIRES_IN || '15m';
 export const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
-// Redis
-export const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+// Email Verification
+export const VERIFICATION_TOKEN_SECRET =
+  process.env.VERIFICATION_TOKEN_SECRET || 'verification_secret';
+export const VERIFICATION_TOKEN_EXPIRES_IN = process.env.VERIFICATION_TOKEN_EXPIRES_IN || '1d';
+// Dev convenience: when true AND not in production, new accounts are auto-verified
+// on signup (the email link is skipped). Needed because Resend can only deliver to
+// the account owner until the sending domain is verified, so test users would
+// otherwise never receive a verification email. Never takes effect in production.
+export const SHOULD_VERIFY_USER = process.env.SHOULD_VERIFY_USER === 'true';
+
+// File storage
+export const FILE_STORAGE_PROVIDER = process.env.FILE_STORAGE_PROVIDER || 'cloudinary';
+export const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB) || 5;
+// Default lifetime (seconds) for signed/time-limited access URLs to private files
+export const SIGNED_URL_EXPIRES_IN = Number(process.env.SIGNED_URL_EXPIRES_IN) || 3600;
 
 // Cloudinary
 export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';

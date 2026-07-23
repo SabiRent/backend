@@ -1,12 +1,60 @@
 import { ErrorCode } from '@/constants/error-code';
 import { ERROR_MESSAGE } from '@/constants/message';
+import { FileVisibility } from '@/constants/storage';
 import { UserRole } from '@/constants/user-role';
+import FileModel, { type FileDocument } from '@/db/models/file.model';
 import Property, { type Property as PropertyDoc } from '@/db/models/property.model';
 import AppError from '@/errors/AppError';
-import { deleteImage, uploadImageBuffer } from '@/utils/cloudinary.util';
+import { getStorageAdapter } from '@/services/storage';
 import type { CreatePropertyInput, UpdatePropertyInput } from '@/validations/property.validation';
 import { StatusCodes } from 'http-status-codes';
 import { isValidObjectId, type HydratedDocument } from 'mongoose';
+
+const PROPERTY_IMAGE_FOLDER = 'property-photos';
+
+// `image` is typed as an ObjectId by the schema, but once a document has gone
+// through `.populate('image')` it holds the full File document at runtime —
+// this cast bridges that gap at the one place callers need the real object.
+const asPopulatedFile = (image: PropertyDoc['image']): FileDocument | undefined =>
+  image ? (image as unknown as FileDocument) : undefined;
+
+const uploadPropertyImageFile = async (file: Express.Multer.File): Promise<string> => {
+  const adapter = getStorageAdapter();
+
+  const uploaded = await adapter.upload({
+    buffer: file.buffer,
+    originalName: file.originalname,
+    mimeType: file.mimetype,
+    size: file.size,
+    folder: PROPERTY_IMAGE_FOLDER,
+  });
+
+  const fileDoc = await FileModel.create({
+    provider: adapter.provider,
+    providerFileId: uploaded.providerFileId,
+    url: uploaded.url,
+    originalName: file.originalname,
+    mimeType: file.mimetype,
+    size: file.size,
+    visibility: FileVisibility.PUBLIC,
+    folder: PROPERTY_IMAGE_FOLDER,
+    metadata: uploaded.metadata,
+  });
+
+  return fileDoc._id.toString();
+};
+
+const deletePropertyImageFile = async (file: FileDocument) => {
+  const adapter = getStorageAdapter(file.provider);
+  const metadata = file.metadata as { resourceType?: string; deliveryType?: string } | undefined;
+
+  await adapter.delete(file.providerFileId, {
+    resourceType: metadata?.resourceType,
+    deliveryType: metadata?.deliveryType,
+  });
+
+  await file.deleteOne();
+};
 
 const sanitizeProperty = (property: HydratedDocument<PropertyDoc>) => ({
   id: property._id.toString(),
@@ -16,7 +64,7 @@ const sanitizeProperty = (property: HydratedDocument<PropertyDoc>) => ({
   type: property.type,
   unitCount: property.unitCount,
   description: property.description,
-  image: property.image,
+  image: asPopulatedFile(property.image)?.url,
   createdAt: property.createdAt,
   updatedAt: property.updatedAt,
 });
@@ -29,7 +77,7 @@ const findPropertyOrThrow = async (propertyId: string) => {
     throw AppError(ERROR_MESSAGE.INVALID_ID, StatusCodes.BAD_REQUEST, ErrorCode.INVALID_ID);
   }
 
-  const property = await Property.findById(propertyId).select('+imagePublicId');
+  const property = await Property.findById(propertyId).populate('image');
 
   if (!property) {
     throw AppError(
@@ -64,16 +112,13 @@ export const createProperty = async (
   input: CreatePropertyInput,
   imageFile?: Express.Multer.File,
 ) => {
-  let image: string | undefined;
-  let imagePublicId: string | undefined;
+  const image = imageFile ? await uploadPropertyImageFile(imageFile) : undefined;
 
-  if (imageFile) {
-    const uploaded = await uploadImageBuffer(imageFile.buffer, 'properties');
-    image = uploaded.secureUrl;
-    imagePublicId = uploaded.publicId;
+  const property = await Property.create({ ...input, owner: ownerId, image });
+
+  if (image) {
+    await property.populate('image');
   }
-
-  const property = await Property.create({ ...input, owner: ownerId, image, imagePublicId });
 
   return sanitizeProperty(property);
 };
@@ -89,7 +134,7 @@ export const listProperties = async (
   const filter = isPrivilegedRole(role) ? {} : { owner: userId };
 
   const [properties, total] = await Promise.all([
-    Property.find(filter).skip(skip).limit(limit),
+    Property.find(filter).skip(skip).limit(limit).populate('image'),
     Property.countDocuments(filter),
   ]);
 
@@ -116,23 +161,26 @@ export const updateProperty = async (
   const property = await findPropertyOrThrow(propertyId);
   assertOwnership(property, userId, role);
 
+  const previousImage = asPopulatedFile(property.image);
+
   Object.assign(property, input);
 
   if (imageFile) {
-    const previousImagePublicId = property.imagePublicId;
-    const uploaded = await uploadImageBuffer(imageFile.buffer, 'properties');
-
-    property.image = uploaded.secureUrl;
-    property.imagePublicId = uploaded.publicId;
-
-    // Only drop the old asset once the new one is safely uploaded, so a failed
-    // upload never leaves the property pointing at an image that no longer exists.
-    if (previousImagePublicId) {
-      await deleteImage(previousImagePublicId);
-    }
+    const imageId = await uploadPropertyImageFile(imageFile);
+    property.set('image', imageId);
   }
 
   await property.save();
+
+  // Only drop the old asset once the new one is safely saved, so a failed
+  // upload/save never leaves the property pointing at a file that no longer exists.
+  if (imageFile && previousImage) {
+    await deletePropertyImageFile(previousImage);
+  }
+
+  if (imageFile) {
+    await property.populate('image');
+  }
 
   return sanitizeProperty(property);
 };
@@ -141,9 +189,11 @@ export const deleteProperty = async (propertyId: string, userId: string, role: U
   const property = await findPropertyOrThrow(propertyId);
   assertOwnership(property, userId, role);
 
+  const image = asPopulatedFile(property.image);
+
   await property.deleteOne();
 
-  if (property.imagePublicId) {
-    await deleteImage(property.imagePublicId);
+  if (image) {
+    await deletePropertyImageFile(image);
   }
 };

@@ -58,13 +58,8 @@ const propertySchema = new Schema(
       trim: true,
     },
     image: {
-      type: String,
-      trim: true,
-    },
-    imagePublicId: {
-      type: String,
-      trim: true,
-      select: false,
+      type: Schema.Types.ObjectId,
+      ref: 'File',
     },
   },
   { timestamps: true },

@@ -50,4 +50,5 @@ export const ERROR_MESSAGE = {
   INVALID_CURRENT_PASSWORD: 'Current password is incorrect',
   PROPERTY_NOT_FOUND: 'Property not found',
   NOT_PROPERTY_OWNER: 'You do not have permission to access this property',
+  INVALID_FILE_TYPE: 'Unsupported file type',
 } as const;

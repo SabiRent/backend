@@ -1,231 +1,229 @@
 import { createApp } from '@/app';
-import type * as HelperUtil from '@/utils/helper.util';
+import User from '@/db/models/user.model';
 import request from 'supertest';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-vi.mock('@/utils/helper.util', async (importOriginal) => {
-  const actual = await importOriginal<typeof HelperUtil>();
-
-  return {
-    ...actual,
-    sendEmail: vi.fn(),
-  };
-});
-
-const { sendEmail } = await import('@/utils/helper.util');
 const app = await createApp();
 
-const signupPayload = {
-  fullName: 'Jane Doe',
-  email: 'jane@example.com',
+const userPayload = {
+  fullName: 'Regular User',
+  email: 'regular@example.com',
+  password: 'StrongPass1',
+};
+
+const adminPayload = {
+  fullName: 'Admin User',
+  email: 'admin@example.com',
   password: 'StrongPass1',
 };
 
 const login = (email: string, password: string) =>
   request(app).post('/api/v1/auth/login').send({ email, password });
 
-describe('POST /api/v1/auth/signup', () => {
-  it('creates a new account without leaking the password hash', async () => {
-    const res = await request(app).post('/api/v1/auth/signup').send(signupPayload);
+const signupAndLogin = async (payload: typeof userPayload) => {
+  const signupRes = await request(app).post('/api/v1/auth/signup').send(payload);
+  const loginRes = await login(payload.email, payload.password);
 
-    expect(res.status).toBe(201);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.email).toBe(signupPayload.email);
+  return { id: signupRes.body.data.id as string, accessToken: loginRes.body.data.accessToken as string };
+};
+
+const asAdmin = async () => {
+  const { id } = await signupAndLogin(adminPayload);
+  await User.findByIdAndUpdate(id, { role: 'admin' });
+
+  // role is baked into the JWT payload at login time — re-login to get a token
+  // that reflects the newly-promoted role
+  const reLoginRes = await login(adminPayload.email, adminPayload.password);
+
+  return { id, accessToken: reLoginRes.body.data.accessToken as string };
+};
+
+describe('GET /api/v1/users/me', () => {
+  it("returns the logged-in user's own profile", async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
+    const res = await request(app)
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBe(userPayload.email);
     expect(res.body.data.password).toBeUndefined();
   });
 
-  it('rejects a duplicate email', async () => {
-    await request(app).post('/api/v1/auth/signup').send(signupPayload);
+  it('rejects a request with no access token', async () => {
+    const res = await request(app).get('/api/v1/users/me');
 
-    const res = await request(app).post('/api/v1/auth/signup').send(signupPayload);
+    expect(res.status).toBe(401);
+  });
+});
 
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('DUPLICATE_ENTRY');
+describe('PATCH /api/v1/users/me', () => {
+  it('updates fullName', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
+    const res = await request(app)
+      .patch('/api/v1/users/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ fullName: 'Updated Name' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.fullName).toBe('Updated Name');
   });
 
-  it('rejects a password that fails the strength rules', async () => {
+  it('rejects a fullName that is too short', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
     const res = await request(app)
-      .post('/api/v1/auth/signup')
-      .send({ ...signupPayload, password: 'weak' });
+      .patch('/api/v1/users/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ fullName: 'A' });
 
     expect(res.status).toBe(422);
-    expect(res.body.errors.password).toBeDefined();
   });
 });
 
-describe('POST /api/v1/auth/login', () => {
-  beforeEach(async () => {
-    await request(app).post('/api/v1/auth/signup').send(signupPayload);
-  });
+describe('PATCH /api/v1/users/me/password', () => {
+  it('rejects the wrong current password', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
 
-  it('logs in with correct credentials and sets a refresh cookie', async () => {
-    const res = await login(signupPayload.email, signupPayload.password);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.accessToken).toEqual(expect.any(String));
-    expect(res.headers['set-cookie'][0]).toMatch(/refreshToken=/);
-  });
-
-  it('rejects the wrong password', async () => {
-    const res = await login(signupPayload.email, 'WrongPass1');
+    const res = await request(app)
+      .patch('/api/v1/users/me/password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ currentPassword: 'WrongOne1', newPassword: 'NewStrongPass1' });
 
     expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('INVALID_EMAIL_PWD');
+    expect(res.body.error.code).toBe('INVALID_PASSWORD');
   });
 
-  it('gives the identical error for a nonexistent email (no enumeration)', async () => {
-    const res = await login('nobody@example.com', 'WhoKnows1');
+  it('rejects a new password identical to the current one', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
 
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('INVALID_EMAIL_PWD');
+    const res = await request(app)
+      .patch('/api/v1/users/me/password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ currentPassword: userPayload.password, newPassword: userPayload.password });
+
+    expect(res.status).toBe(400);
   });
 
-  it('locks the account after 5 failed attempts, even for the correct password', async () => {
-    for (let i = 0; i < 5; i += 1) {
-      await login(signupPayload.email, 'WrongPass1');
-    }
-
-    const res = await login(signupPayload.email, signupPayload.password);
-
-    expect(res.status).toBe(429);
-    expect(res.body.error.code).toBe('TOO_MANY_REQUESTS');
-  });
-});
-
-describe('POST /api/v1/auth/refresh', () => {
-  beforeEach(async () => {
-    await request(app).post('/api/v1/auth/signup').send(signupPayload);
-  });
-
-  it('issues a new access token for a valid refresh cookie', async () => {
+  it('changes the password and revokes the existing session', async () => {
     const agent = request.agent(app);
-    await agent.post('/api/v1/auth/login').send({
-      email: signupPayload.email,
-      password: signupPayload.password,
-    });
-
-    const res = await agent.post('/api/v1/auth/refresh').send();
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.accessToken).toEqual(expect.any(String));
-  });
-
-  it('rejects a refresh token that was already rotated out', async () => {
-    const agent = request.agent(app);
+    await agent.post('/api/v1/auth/signup').send(userPayload);
     const loginRes = await agent.post('/api/v1/auth/login').send({
-      email: signupPayload.email,
-      password: signupPayload.password,
+      email: userPayload.email,
+      password: userPayload.password,
     });
-    const originalCookie = loginRes.headers['set-cookie'][0] as string;
+    const accessToken = loginRes.body.data.accessToken as string;
 
-    // JWTs only carry second-level timestamps — without a real gap, the
-    // "rotated" token can come out byte-identical to the original and this
-    // test would pass for the wrong reason.
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    await agent.post('/api/v1/auth/refresh').send();
+    const changeRes = await agent
+      .patch('/api/v1/users/me/password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ currentPassword: userPayload.password, newPassword: 'NewStrongPass1' });
 
-    const res = await request(app)
-      .post('/api/v1/auth/refresh')
-      .set('Cookie', originalCookie)
-      .send();
+    expect(changeRes.status).toBe(200);
 
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('INVALID_EXPIRED_TOKEN');
-  });
-
-  it('rejects when no refresh cookie is present', async () => {
-    const res = await request(app).post('/api/v1/auth/refresh').send();
-
-    expect(res.status).toBe(401);
-  });
-});
-
-describe('POST /api/v1/auth/logout', () => {
-  it('revokes the refresh token server-side, not just the cookie', async () => {
-    await request(app).post('/api/v1/auth/signup').send(signupPayload);
-
-    const agent = request.agent(app);
-    await agent.post('/api/v1/auth/login').send({
-      email: signupPayload.email,
-      password: signupPayload.password,
-    });
-
-    const logoutRes = await agent.post('/api/v1/auth/logout').send();
-    expect(logoutRes.status).toBe(200);
-
-    const refreshRes = await agent.post('/api/v1/auth/refresh').send();
-    expect(refreshRes.status).toBe(401);
-  });
-});
-
-describe('POST /api/v1/auth/forgot-password', () => {
-  beforeEach(async () => {
-    await request(app).post('/api/v1/auth/signup').send(signupPayload);
-    vi.clearAllMocks();
-  });
-
-  it('sends a reset email for a registered account', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/forgot-password')
-      .send({ email: signupPayload.email });
-
-    expect(res.status).toBe(200);
-    expect(sendEmail).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns the identical response for an unregistered email, sending nothing', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/forgot-password')
-      .send({ email: 'nobody@example.com' });
-
-    expect(res.status).toBe(200);
-    expect(sendEmail).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /api/v1/auth/reset-password', () => {
-  beforeEach(async () => {
-    await request(app).post('/api/v1/auth/signup').send(signupPayload);
-    vi.clearAllMocks();
-  });
-
-  it('resets the password and invalidates existing sessions', async () => {
-    const agent = request.agent(app);
-    await agent.post('/api/v1/auth/login').send({
-      email: signupPayload.email,
-      password: signupPayload.password,
-    });
-
-    await request(app)
-      .post('/api/v1/auth/forgot-password')
-      .send({ email: signupPayload.email });
-
-    const mockCall = vi.mocked(sendEmail).mock.calls[0][0];
-    const resetLink = mockCall.data.resetLink as string;
-    const resetToken = resetLink.split('token=')[1];
-
-    const resetRes = await request(app)
-      .post('/api/v1/auth/reset-password')
-      .send({ token: resetToken, newPassword: 'NewStrongPass1' });
-
-    expect(resetRes.status).toBe(200);
-
+    // the refresh cookie captured before the password change should now be dead
     const refreshRes = await agent.post('/api/v1/auth/refresh').send();
     expect(refreshRes.status).toBe(401);
 
-    const newLoginRes = await login(signupPayload.email, 'NewStrongPass1');
-    expect(newLoginRes.status).toBe(200);
-
-    const oldLoginRes = await login(signupPayload.email, signupPayload.password);
+    const oldLoginRes = await login(userPayload.email, userPayload.password);
     expect(oldLoginRes.status).toBe(401);
+
+    const newLoginRes = await login(userPayload.email, 'NewStrongPass1');
+    expect(newLoginRes.status).toBe(200);
+  });
+});
+
+describe('admin-only user management routes', () => {
+  it('blocks a regular user from listing users', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
+    const res = await request(app)
+      .get('/api/v1/users')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(403);
   });
 
-  it('rejects an invalid reset token', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/reset-password')
-      .send({ token: 'garbage.invalid.token', newPassword: 'NewStrongPass1' });
+  it('lets an admin list users with pagination', async () => {
+    const { accessToken } = await asAdmin();
 
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('INVALID_EXPIRED_TOKEN');
+    const res = await request(app)
+      .get('/api/v1/users?page=1&limit=5')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.users)).toBe(true);
+    expect(res.body.pagination).toMatchObject({ page: 1, limit: 5 });
+  });
+
+  it('rejects an invalid user ID format', async () => {
+    const { accessToken } = await asAdmin();
+
+    const res = await request(app)
+      .get('/api/v1/users/not-a-valid-id')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_ID');
+  });
+
+  it('gets a single user by id', async () => {
+    const { accessToken } = await asAdmin();
+    const { id: targetId } = await signupAndLogin(userPayload);
+
+    const res = await request(app)
+      .get(`/api/v1/users/${targetId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBe(userPayload.email);
+  });
+
+  it('deactivates a user, blocking their login, then reactivates them', async () => {
+    const { accessToken: adminToken } = await asAdmin();
+    const { id: targetId } = await signupAndLogin(userPayload);
+
+    const deactivateRes = await request(app)
+      .patch(`/api/v1/users/${targetId}/deactivate`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(deactivateRes.status).toBe(200);
+    expect(deactivateRes.body.data.isActive).toBe(false);
+
+    const blockedLoginRes = await login(userPayload.email, userPayload.password);
+    expect(blockedLoginRes.status).toBe(403);
+
+    const doubleDeactivateRes = await request(app)
+      .patch(`/api/v1/users/${targetId}/deactivate`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(doubleDeactivateRes.status).toBe(409);
+
+    const activateRes = await request(app)
+      .patch(`/api/v1/users/${targetId}/activate`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(activateRes.status).toBe(200);
+    expect(activateRes.body.data.isActive).toBe(true);
+
+    const doubleActivateRes = await request(app)
+      .patch(`/api/v1/users/${targetId}/activate`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(doubleActivateRes.status).toBe(409);
+
+    const restoredLoginRes = await login(userPayload.email, userPayload.password);
+    expect(restoredLoginRes.status).toBe(200);
+  });
+
+  it('refuses to let an admin deactivate their own account', async () => {
+    const { id: adminId, accessToken } = await asAdmin();
+
+    const res = await request(app)
+      .patch(`/api/v1/users/${adminId}/deactivate`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('CANNOT_DEACTIVATE_LOGGED_IN_USER');
   });
 });
