@@ -19,7 +19,7 @@
     "test:run": "dotenv -e .env.test -- vitest run --passWithNoTests",
     "test:coverage": "dotenv -e .env.test -- vitest run --coverage",
     "sync-env": "tsx scripts/sync-env.ts",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "keywords": [],
   "author": "",
