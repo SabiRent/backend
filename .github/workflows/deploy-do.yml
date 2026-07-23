@@ -1,7 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - api-mycompound
+name: Build and deploy Node.js app to DigitalOcean - mycompound
 
 on:
   push:
@@ -13,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
     services:
       mongodb:
         image: mongo:7
@@ -81,37 +78,29 @@ jobs:
       - name: Run tests
         run: npm run test:run --if-present
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: .
-
   deploy:
+    name: Deploy to DigitalOcean Droplet
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: node-app
-
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_3A199E9BF4334CBDA2D31578E7C762FB }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6B2BCA17CEE64B778D20F1D1C1516903 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_62D0283B35CC41179946145F7CDA3BFF }}
-
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'api-mycompound'
-          slot-name: 'Production'
-          package: .
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/deploy/apps/mycompound
+            echo "→ Pulling latest code..."
+            git pull origin dev
+            echo "→ Installing dependencies..."
+            npm ci
+            echo "→ Building..."
+            npm run build
+            echo "→ Reloading processes..."
+            pm2 startOrReload pm2.config.cjs --update-env
+            echo "→ Saving PM2 state..."
+            pm2 save
+            echo "✓ Deploy complete"
