@@ -33,3 +33,8 @@ export const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
 // Redis
 export const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+
+// Cloudinary
+export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
+export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
+export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
