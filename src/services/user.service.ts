@@ -1,8 +1,10 @@
+import logger from '@/config/logger.config';
 import { ErrorCode } from '@/constants/error-code';
 import { ERROR_MESSAGE } from '@/constants/message';
 import RefreshToken from '@/db/models/refresh-token.model';
 import User from '@/db/models/user.model';
 import AppError from '@/errors/AppError';
+import { deleteFile, uploadFile } from '@/services/file.service';
 import { hashPassword } from '@/utils/helper.util';
 import type { ChangePasswordInput, UpdateProfileInput } from '@/validations/user.validation';
 import argon2 from 'argon2';
@@ -16,6 +18,7 @@ const sanitizeUser = (user: HydratedDocument<UserType>) => ({
   email: user.email,
   role: user.role,
   isActive: user.isActive,
+  avatarUrl: user.avatarUrl ?? null,
   createdAt: user.createdAt,
 });
 
@@ -44,6 +47,39 @@ export const updateProfile = async (userId: string, input: UpdateProfileInput) =
 
   user.fullName = input.fullName;
   await user.save();
+
+  return sanitizeUser(user);
+};
+
+/**
+ * Uploads a new profile image for the user and points their record at it.
+ *
+ * The new image is uploaded and saved first; only then do we delete the old one.
+ * That ordering means a failure while deleting can never leave the user without
+ * an avatar — at worst an unused image lingers in storage.
+ */
+export const updateAvatar = async (userId: string, file: Express.Multer.File) => {
+  const user = await findUserOrThrow(userId);
+
+  const previousFileId = user.avatarFileId;
+
+  // Profile images are public, so the returned accessUrl is a permanent public
+  // URL we can safely store on the user.
+  const { file: stored, accessUrl } = await uploadFile({ file, folder: 'avatars' });
+
+  user.avatarUrl = accessUrl;
+  user.avatarFileId = stored._id;
+  await user.save();
+
+  // Remove the image the user was using before. Best-effort — the new avatar is
+  // already saved, so a failed cleanup should not fail the request.
+  if (previousFileId) {
+    await deleteFile(previousFileId.toString()).catch((err) => {
+      logger.error(
+        `Failed to delete old avatar ${previousFileId.toString()}: ${err instanceof Error ? err.message : err}`,
+      );
+    });
+  }
 
   return sanitizeUser(user);
 };

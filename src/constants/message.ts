@@ -3,6 +3,7 @@ export const SUCCESS_MESSAGE = {
   UPDATED: 'The Record has been updated successfully',
   DELETED: 'The Record has been deleted successfully',
   PASSWORD_UPDATE_SUCCESS: 'Password updated successfully',
+  AVATAR_UPDATE_SUCCESS: 'Profile image updated successfully',
   EMAIL_VERIFICATION_SENT: 'Email verification mail sent successfully',
   EMAIL_VERIFIED_SUCCESS: 'Email verified successfully',
   USER_ACTIVATE_SUCCESS: 'User account activated successfully',
@@ -49,4 +50,5 @@ export const ERROR_MESSAGE = {
   NO_FIELDS_TO_UPDATE: 'No fields provided to update',
   INVALID_CURRENT_PASSWORD: 'Current password is incorrect',
   INVALID_FILE_TYPE: 'Unsupported file type',
+  NO_FILE_UPLOADED: 'No file was uploaded',
 } as const;

@@ -33,6 +33,16 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // Public URL of the user's profile image (empty until they upload one).
+    avatarUrl: {
+      type: String,
+    },
+    // The File record behind avatarUrl, kept so we can delete the old image
+    // from storage when the user uploads a new one.
+    avatarFileId: {
+      type: Schema.Types.ObjectId,
+      ref: 'File',
+    },
   },
   { timestamps: true },
 );
