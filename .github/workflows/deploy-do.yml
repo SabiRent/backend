@@ -96,7 +96,7 @@ jobs:
             echo "→ Pulling latest code..."
             git pull origin dev
             echo "→ Installing dependencies..."
-            npm ci
+            npm install --production
             echo "→ Building..."
             npm run build
             echo "→ Reloading processes..."
