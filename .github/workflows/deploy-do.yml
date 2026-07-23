@@ -96,7 +96,7 @@ jobs:
             echo "→ Pulling latest code..."
             git pull origin dev
             echo "→ Installing dependencies..."
-            npm install --production
+            HUSKY=0 npm install --omit=dev
             echo "→ Building..."
             npm run build
             echo "→ Reloading processes..."
