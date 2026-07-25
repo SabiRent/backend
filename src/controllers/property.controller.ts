@@ -6,7 +6,11 @@ import {
   listProperties,
   updateProperty,
 } from '@/services/property.service';
-import type { CreatePropertyInput, UpdatePropertyInput } from '@/validations/property.validation';
+import type {
+  CreatePropertyInput,
+  ListPropertiesQuery,
+  UpdatePropertyInput,
+} from '@/validations/property.validation';
 import type { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 
@@ -24,8 +28,7 @@ export const createPropertyHandler = async (
 };
 
 export const listPropertiesHandler = async (req: Request, res: Response) => {
-  const page = Number(req.query.page) || 1;
-  const limit = Number(req.query.limit) || 20;
+  const { page, limit } = req.validatedQuery as unknown as ListPropertiesQuery;
 
   const result = await listProperties(req.user!.id, req.user!.role, page, limit);
 

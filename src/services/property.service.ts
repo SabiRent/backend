@@ -1,11 +1,10 @@
 import { ErrorCode } from '@/constants/error-code';
 import { ERROR_MESSAGE } from '@/constants/message';
-import { FileVisibility } from '@/constants/storage';
 import { UserRole } from '@/constants/user-role';
-import FileModel, { type FileDocument } from '@/db/models/file.model';
+import type { FileDocument } from '@/db/models/file.model';
 import Property, { type Property as PropertyDoc } from '@/db/models/property.model';
 import AppError from '@/errors/AppError';
-import { getStorageAdapter } from '@/services/storage';
+import { deleteFile, uploadFile } from '@/services/file.service';
 import type { CreatePropertyInput, UpdatePropertyInput } from '@/validations/property.validation';
 import { StatusCodes } from 'http-status-codes';
 import { isValidObjectId, type HydratedDocument } from 'mongoose';
@@ -19,41 +18,9 @@ const asPopulatedFile = (image: PropertyDoc['image']): FileDocument | undefined 
   image ? (image as unknown as FileDocument) : undefined;
 
 const uploadPropertyImageFile = async (file: Express.Multer.File): Promise<string> => {
-  const adapter = getStorageAdapter();
-
-  const uploaded = await adapter.upload({
-    buffer: file.buffer,
-    originalName: file.originalname,
-    mimeType: file.mimetype,
-    size: file.size,
-    folder: PROPERTY_IMAGE_FOLDER,
-  });
-
-  const fileDoc = await FileModel.create({
-    provider: adapter.provider,
-    providerFileId: uploaded.providerFileId,
-    url: uploaded.url,
-    originalName: file.originalname,
-    mimeType: file.mimetype,
-    size: file.size,
-    visibility: FileVisibility.PUBLIC,
-    folder: PROPERTY_IMAGE_FOLDER,
-    metadata: uploaded.metadata,
-  });
+  const { file: fileDoc } = await uploadFile({ file, folder: PROPERTY_IMAGE_FOLDER });
 
   return fileDoc._id.toString();
-};
-
-const deletePropertyImageFile = async (file: FileDocument) => {
-  const adapter = getStorageAdapter(file.provider);
-  const metadata = file.metadata as { resourceType?: string; deliveryType?: string } | undefined;
-
-  await adapter.delete(file.providerFileId, {
-    resourceType: metadata?.resourceType,
-    deliveryType: metadata?.deliveryType,
-  });
-
-  await file.deleteOne();
 };
 
 const sanitizeProperty = (property: HydratedDocument<PropertyDoc>) => ({
@@ -61,7 +28,6 @@ const sanitizeProperty = (property: HydratedDocument<PropertyDoc>) => ({
   owner: property.owner.toString(),
   name: property.name,
   address: property.address,
-  type: property.type,
   unitCount: property.unitCount,
   description: property.description,
   image: asPopulatedFile(property.image)?.url,
@@ -91,6 +57,8 @@ const findPropertyOrThrow = async (propertyId: string) => {
 };
 
 // Ownership rule: a landlord may only touch their own properties; admins/super-admins may touch any.
+// A non-owner gets the exact same 404 as a truly nonexistent property (not a 403) — otherwise
+// the status code alone would leak whether a given property ID exists to someone who can't access it.
 const assertOwnership = (
   property: HydratedDocument<PropertyDoc>,
   userId: string,
@@ -100,9 +68,9 @@ const assertOwnership = (
 
   if (property.owner.toString() !== userId) {
     throw AppError(
-      ERROR_MESSAGE.NOT_PROPERTY_OWNER,
-      StatusCodes.FORBIDDEN,
-      ErrorCode.NOT_PROPERTY_OWNER,
+      ERROR_MESSAGE.PROPERTY_NOT_FOUND,
+      StatusCodes.NOT_FOUND,
+      ErrorCode.RESOURCE_NOT_FOUND,
     );
   }
 };
@@ -175,7 +143,7 @@ export const updateProperty = async (
   // Only drop the old asset once the new one is safely saved, so a failed
   // upload/save never leaves the property pointing at a file that no longer exists.
   if (imageFile && previousImage) {
-    await deletePropertyImageFile(previousImage);
+    await deleteFile(previousImage._id.toString());
   }
 
   if (imageFile) {
@@ -194,6 +162,6 @@ export const deleteProperty = async (propertyId: string, userId: string, role: U
   await property.deleteOne();
 
   if (image) {
-    await deletePropertyImageFile(image);
+    await deleteFile(image._id.toString());
   }
 };

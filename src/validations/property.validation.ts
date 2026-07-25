@@ -1,4 +1,3 @@
-import { PropertyType } from '@/constants/property-type';
 import { z } from '@/lib/zod';
 
 const addressObjectSchema = z
@@ -33,12 +32,11 @@ export const createPropertySchema = z
       .min(2, 'Property name must be at least 2 characters')
       .openapi({ example: 'Sunshine Apartments' }),
     address: addressSchema.openapi({
-      example: { street: '12 Palm Street', city: 'Lagos', state: 'Lagos', country: 'Nigeria' },
+      type: 'string',
+      description:
+        'JSON-encoded address object — required keys: street, city (state/country optional)',
+      example: '{"street":"12 Palm Street","city":"Lagos","state":"Lagos"}',
     }),
-    type: z
-      .enum(Object.values(PropertyType))
-      .optional()
-      .openapi({ example: PropertyType.RESIDENTIAL }),
     unitCount: z.coerce
       .number({ error: 'Unit count is required' })
       .int('Unit count must be a whole number')
@@ -57,3 +55,25 @@ export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
 export const updatePropertySchema = createPropertySchema.partial().openapi('UpdatePropertyInput');
 
 export type UpdatePropertyInput = z.infer<typeof updatePropertySchema>;
+
+export const listPropertiesQuerySchema = z
+  .object({
+    page: z.coerce
+      .number({ error: 'Page must be a number' })
+      .int('Page must be a whole number')
+      .min(1, 'Page must be at least 1')
+      .optional()
+      .default(1)
+      .openapi({ example: 1 }),
+    limit: z.coerce
+      .number({ error: 'Limit must be a number' })
+      .int('Limit must be a whole number')
+      .min(1, 'Limit must be at least 1')
+      .max(100, 'Limit cannot exceed 100')
+      .optional()
+      .default(20)
+      .openapi({ example: 20 }),
+  })
+  .openapi('ListPropertiesQuery');
+
+export type ListPropertiesQuery = z.infer<typeof listPropertiesQuerySchema>;

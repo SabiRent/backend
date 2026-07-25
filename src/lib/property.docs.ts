@@ -1,4 +1,3 @@
-import { PropertyType } from '@/constants/property-type';
 import { registry } from '@/lib/open-api-registry';
 import {
   errorResponseSchema,
@@ -7,6 +6,11 @@ import {
   validationErrorResponseSchema,
 } from '@/lib/response.docs';
 import { z } from '@/lib/zod';
+import {
+  createPropertySchema,
+  listPropertiesQuerySchema,
+  updatePropertySchema,
+} from '@/validations/property.validation';
 
 const propertyAddressResponseSchema = z
   .object({
@@ -22,7 +26,6 @@ const propertyDataSchema = z.object({
   owner: z.string().openapi({ example: '6a60b6659c16fbcbeab13e48' }),
   name: z.string().openapi({ example: 'Sunshine Apartments' }),
   address: propertyAddressResponseSchema,
-  type: z.string().openapi({ example: PropertyType.RESIDENTIAL }),
   unitCount: z.number().openapi({ example: 12 }),
   description: z.string().optional().openapi({ example: 'A 12-unit apartment block in Lekki' }),
   image: z
@@ -49,31 +52,23 @@ const propertyListResponseSchema = z
   .openapi('PropertyListResponse');
 
 // Documented as multipart/form-data (not JSON) because property creation/update accepts an
-// image file alongside the other fields. `address` travels as a JSON-encoded string field —
-// multipart requests can't carry nested objects natively, so the client stringifies it and
-// the server parses it back out (see the `z.preprocess` step in property.validation.ts).
-const propertyFormSchema = z
-  .object({
-    name: z.string().openapi({ example: 'Sunshine Apartments' }),
-    address: z.string().openapi({
-      description: 'JSON-encoded address object',
-      example: '{"street":"12 Palm Street","city":"Lagos","state":"Lagos"}',
-    }),
-    type: z
-      .enum(Object.values(PropertyType))
-      .optional()
-      .openapi({ example: PropertyType.RESIDENTIAL }),
-    unitCount: z.string().openapi({ example: '12' }),
-    description: z.string().optional().openapi({ example: 'A 12-unit apartment block in Lekki' }),
-    image: z.string().optional().openapi({
-      type: 'string',
-      format: 'binary',
-      description: 'Property photo — jpeg/png/webp, max 5MB',
-    }),
-  })
+// image file alongside the other fields. Reuses createPropertySchema/updatePropertySchema
+// directly — property.validation.ts is the single source of truth for the request shape —
+// extended only with `image`, which Multer handles separately from req.body and so was
+// never part of the Zod schema to begin with.
+const imageFieldSchema = z.string().optional().openapi({
+  type: 'string',
+  format: 'binary',
+  description: 'Property photo — jpeg/png/webp, max 5MB',
+});
+
+const propertyFormSchema = createPropertySchema
+  .extend({ image: imageFieldSchema })
   .openapi('PropertyForm');
 
-const updatePropertyFormSchema = propertyFormSchema.partial().openapi('UpdatePropertyForm');
+const updatePropertyFormSchema = updatePropertySchema
+  .extend({ image: imageFieldSchema })
+  .openapi('UpdatePropertyForm');
 
 const idParam = z.object({ id: z.string().openapi({ example: '6a60b8659c16fbcbeab13e49' }) });
 
@@ -112,10 +107,7 @@ export const registerPropertyDocs = () => {
     summary: 'List properties — landlords see only their own, admins/super-admins see all',
     security: bearerAuth,
     request: {
-      query: z.object({
-        page: z.string().optional().openapi({ example: '1' }),
-        limit: z.string().optional().openapi({ example: '20' }),
-      }),
+      query: listPropertiesQuerySchema,
     },
     responses: {
       '200': {
@@ -149,12 +141,9 @@ export const registerPropertyDocs = () => {
         description: 'Missing or invalid access token',
         content: { 'application/json': { schema: errorResponseSchema } },
       },
-      '403': {
-        description: 'Logged in, but not this property’s owner (and not an admin)',
-        content: { 'application/json': { schema: errorResponseSchema } },
-      },
       '404': {
-        description: 'No property with that ID',
+        description:
+          "No property with that ID, or it belongs to someone else — deliberately identical either way so a non-owner can't tell which one it is",
         content: { 'application/json': { schema: errorResponseSchema } },
       },
     },
@@ -183,12 +172,9 @@ export const registerPropertyDocs = () => {
         description: 'Missing or invalid access token',
         content: { 'application/json': { schema: errorResponseSchema } },
       },
-      '403': {
-        description: 'Logged in, but not this property’s owner (and not an admin)',
-        content: { 'application/json': { schema: errorResponseSchema } },
-      },
       '404': {
-        description: 'No property with that ID',
+        description:
+          "No property with that ID, or it belongs to someone else — deliberately identical either way so a non-owner can't tell which one it is",
         content: { 'application/json': { schema: errorResponseSchema } },
       },
       '422': {
@@ -218,12 +204,9 @@ export const registerPropertyDocs = () => {
         description: 'Missing or invalid access token',
         content: { 'application/json': { schema: errorResponseSchema } },
       },
-      '403': {
-        description: 'Logged in, but not this property’s owner (and not an admin)',
-        content: { 'application/json': { schema: errorResponseSchema } },
-      },
       '404': {
-        description: 'No property with that ID',
+        description:
+          "No property with that ID, or it belongs to someone else — deliberately identical either way so a non-owner can't tell which one it is",
         content: { 'application/json': { schema: errorResponseSchema } },
       },
     },

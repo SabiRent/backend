@@ -19,11 +19,10 @@ export const validateSchema = (schema: ZodTypeAny, reqType: 'query' | 'body' = '
       if (reqType === 'body') {
         req.body = parsed;
       } else {
-        const existingQuery = req.query as Record<string, unknown>;
-        Object.keys(existingQuery).forEach((key) => {
-          delete existingQuery[key];
-        });
-        Object.assign(existingQuery, parsed as Record<string, unknown>);
+        // req.query itself can't be reassigned or reliably mutated in place under
+        // Express 5 (see the note on Request.validatedQuery in express.d.ts) — the
+        // coerced/defaulted result goes here instead, and handlers read from it.
+        req.validatedQuery = parsed as Record<string, unknown>;
       }
 
       next();

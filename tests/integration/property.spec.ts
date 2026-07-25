@@ -79,7 +79,6 @@ const asAdmin = async () => {
 const validPropertyFields = {
   name: 'Cedar Court',
   address: JSON.stringify({ street: '7 Green Drive', city: 'Lekki', state: 'Lagos' }),
-  type: 'residential',
   unitCount: '12',
   description: 'A 12-unit estate',
 };
@@ -182,6 +181,48 @@ describe('GET /api/v1/properties', () => {
     expect(res.body.properties).toHaveLength(1);
   });
 
+  it('defaults page and limit when the query is omitted', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+
+    const res = await request(app)
+      .get('/api/v1/properties')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.pagination).toMatchObject({ page: 1, limit: 20 });
+  });
+
+  it('coerces string query values to numbers', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+
+    const res = await request(app)
+      .get('/api/v1/properties?page=2&limit=5')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.pagination).toMatchObject({ page: 2, limit: 5 });
+  });
+
+  it('rejects a non-numeric page value', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+
+    const res = await request(app)
+      .get('/api/v1/properties?page=abc')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects a limit above the maximum', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+
+    const res = await request(app)
+      .get('/api/v1/properties?limit=500')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(422);
+  });
+
   it('lets an admin see every property', async () => {
     const { accessToken: landlordToken } = await signupAndLogin(landlordPayload);
     const { accessToken: adminToken } = await asAdmin();
@@ -218,8 +259,9 @@ describe('GET /api/v1/properties/:id', () => {
       .get(`/api/v1/properties/${createRes.body.data.id}`)
       .set('Authorization', `Bearer ${otherToken}`);
 
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('NOT_PROPERTY_OWNER');
+    // 404, not 403 — a non-owner shouldn't be able to tell "not yours" from "doesn't exist"
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
   });
 
   it('lets an admin fetch any property', async () => {
@@ -298,7 +340,7 @@ describe('PATCH /api/v1/properties/:id', () => {
       .set('Authorization', `Bearer ${otherToken}`)
       .field('name', 'Hijacked');
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -329,6 +371,6 @@ describe('DELETE /api/v1/properties/:id', () => {
       .delete(`/api/v1/properties/${createRes.body.data.id}`)
       .set('Authorization', `Bearer ${otherToken}`);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });
