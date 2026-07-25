@@ -1,4 +1,3 @@
-import { PropertyType } from '@/constants/property-type';
 import { Schema, model, type InferSchemaType } from 'mongoose';
 
 const addressSchema = new Schema(
@@ -42,11 +41,6 @@ const propertySchema = new Schema(
     address: {
       type: addressSchema,
       required: true,
-    },
-    type: {
-      type: String,
-      enum: Object.values(PropertyType),
-      default: PropertyType.RESIDENTIAL,
     },
     unitCount: {
       type: Number,
