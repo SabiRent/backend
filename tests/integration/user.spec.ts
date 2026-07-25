@@ -8,11 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // service so tests never touch the network — we only care that the endpoint
 // wires the upload result onto the user and cleans up the old image.
 vi.mock('@/services/file.service', () => ({
-  uploadFile: vi.fn(async () => ({
-    file: { _id: new Types.ObjectId() },
-    accessUrl: 'https://cdn.test/avatars/new-avatar.png',
-  })),
+  // upload just needs to hand back a file reference for the user to point at
+  uploadFile: vi.fn(async () => ({ file: { _id: new Types.ObjectId() } })),
   deleteFile: vi.fn(async () => undefined),
+  // the avatar URL is resolved from the stored file on read
+  getFileAccessUrl: vi.fn(async () => 'https://cdn.test/avatars/new-avatar.png'),
 }));
 
 const { uploadFile, deleteFile } = await import('@/services/file.service');

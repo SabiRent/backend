@@ -4,7 +4,7 @@ import { ERROR_MESSAGE } from '@/constants/message';
 import RefreshToken from '@/db/models/refresh-token.model';
 import User from '@/db/models/user.model';
 import AppError from '@/errors/AppError';
-import { deleteFile, uploadFile } from '@/services/file.service';
+import { deleteFile, getFileAccessUrl, uploadFile } from '@/services/file.service';
 import { hashPassword } from '@/utils/helper.util';
 import type { ChangePasswordInput, UpdateProfileInput } from '@/validations/user.validation';
 import argon2 from 'argon2';
@@ -18,8 +18,27 @@ const sanitizeUser = (user: HydratedDocument<UserType>) => ({
   email: user.email,
   role: user.role,
   isActive: user.isActive,
-  avatarUrl: user.avatarUrl ?? null,
   createdAt: user.createdAt,
+});
+
+// Look up the user's avatar URL from the file it points at. The files collection
+// is the single source of truth, so we resolve it here on read instead of storing
+// a copy of the URL on the user.
+const resolveAvatarUrl = async (user: HydratedDocument<UserType>): Promise<string | null> => {
+  if (!user.avatarFileId) return null;
+
+  try {
+    return await getFileAccessUrl(user.avatarFileId.toString());
+  } catch {
+    // the file record is gone — treat the user as having no avatar
+    return null;
+  }
+};
+
+// The user object we return to clients: the base fields plus the resolved avatar.
+const buildUserResponse = async (user: HydratedDocument<UserType>) => ({
+  ...sanitizeUser(user),
+  avatarUrl: await resolveAvatarUrl(user),
 });
 
 const findUserOrThrow = async (userId: string) => {
@@ -39,7 +58,7 @@ const findUserOrThrow = async (userId: string) => {
 export const getProfile = async (userId: string) => {
   const user = await findUserOrThrow(userId);
 
-  return sanitizeUser(user);
+  return buildUserResponse(user);
 };
 
 export const updateProfile = async (userId: string, input: UpdateProfileInput) => {
@@ -48,7 +67,7 @@ export const updateProfile = async (userId: string, input: UpdateProfileInput) =
   user.fullName = input.fullName;
   await user.save();
 
-  return sanitizeUser(user);
+  return buildUserResponse(user);
 };
 
 /**
@@ -63,11 +82,10 @@ export const updateAvatar = async (userId: string, file: Express.Multer.File) =>
 
   const previousFileId = user.avatarFileId;
 
-  // Profile images are public, so the returned accessUrl is a permanent public
-  // URL we can safely store on the user.
-  const { file: stored, accessUrl } = await uploadFile({ file, folder: 'avatars' });
+  // Upload the new image and point the user at its file record. The URL itself is
+  // resolved from this reference on read, so we don't store it on the user.
+  const { file: stored } = await uploadFile({ file, folder: 'avatars' });
 
-  user.avatarUrl = accessUrl;
   user.avatarFileId = stored._id;
   await user.save();
 
@@ -81,7 +99,7 @@ export const updateAvatar = async (userId: string, file: Express.Multer.File) =>
     });
   }
 
-  return sanitizeUser(user);
+  return buildUserResponse(user);
 };
 
 export const changePassword = async (userId: string, input: ChangePasswordInput) => {
@@ -131,7 +149,7 @@ export const listUsers = async (page: number, limit: number) => {
   ]);
 
   return {
-    users: users.map(sanitizeUser),
+    users: await Promise.all(users.map(buildUserResponse)),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
 };
@@ -143,7 +161,7 @@ export const getUserById = async (targetUserId: string) => {
 
   const user = await findUserOrThrow(targetUserId);
 
-  return sanitizeUser(user);
+  return buildUserResponse(user);
 };
 
 export const deactivateUser = async (targetUserId: string, requestingUserId: string) => {
@@ -175,7 +193,7 @@ export const deactivateUser = async (targetUserId: string, requestingUserId: str
   // deactivating an account should kill its active session too
   await RefreshToken.deleteOne({ user: user._id });
 
-  return sanitizeUser(user);
+  return buildUserResponse(user);
 };
 
 export const activateUser = async (targetUserId: string) => {
@@ -196,5 +214,5 @@ export const activateUser = async (targetUserId: string) => {
   user.isActive = true;
   await user.save();
 
-  return sanitizeUser(user);
+  return buildUserResponse(user);
 };

@@ -33,12 +33,9 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    // Public URL of the user's profile image (empty until they upload one).
-    avatarUrl: {
-      type: String,
-    },
-    // The File record behind avatarUrl, kept so we can delete the old image
-    // from storage when the user uploads a new one.
+    // The user's profile image lives in the files collection. We store only the
+    // reference here and resolve the actual URL from it on read, so the files
+    // collection stays the single source of truth.
     avatarFileId: {
       type: Schema.Types.ObjectId,
       ref: 'File',
