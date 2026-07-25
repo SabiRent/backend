@@ -33,6 +33,13 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // The user's profile image lives in the files collection. We store only the
+    // reference here and resolve the actual URL from it on read, so the files
+    // collection stays the single source of truth.
+    avatarFileId: {
+      type: Schema.Types.ObjectId,
+      ref: 'File',
+    },
   },
   { timestamps: true },
 );

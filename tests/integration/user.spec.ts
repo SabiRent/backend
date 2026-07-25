@@ -1,8 +1,21 @@
 import { createApp } from '@/app';
 import User from '@/db/models/user.model';
+import { Types } from 'mongoose';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Avatar upload goes through the storage provider (Cloudinary). Stub the file
+// service so tests never touch the network — we only care that the endpoint
+// wires the upload result onto the user and cleans up the old image.
+vi.mock('@/services/file.service', () => ({
+  // upload just needs to hand back a file reference for the user to point at
+  uploadFile: vi.fn(async () => ({ file: { _id: new Types.ObjectId() } })),
+  deleteFile: vi.fn(async () => undefined),
+  // the avatar URL is resolved from the stored file on read
+  getFileAccessUrl: vi.fn(async () => 'https://cdn.test/avatars/new-avatar.png'),
+}));
+
+const { uploadFile, deleteFile } = await import('@/services/file.service');
 const app = await createApp();
 
 const userPayload = {
@@ -132,6 +145,78 @@ describe('PATCH /api/v1/users/me/password', () => {
 
     const newLoginRes = await login(userPayload.email, 'NewStrongPass1');
     expect(newLoginRes.status).toBe(200);
+  });
+});
+
+describe('PATCH /api/v1/users/me/avatar', () => {
+  const pngBytes = Buffer.from('fake-png-bytes');
+
+  beforeEach(() => {
+    // reset call counts between tests but keep the mock implementations
+    vi.clearAllMocks();
+  });
+
+  it('uploads a profile image and returns its URL', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
+    const res = await request(app)
+      .patch('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .attach('avatar', pngBytes, { filename: 'me.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.avatarUrl).toBe('https://cdn.test/avatars/new-avatar.png');
+    expect(uploadFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a non-image file type with 415', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
+    const res = await request(app)
+      .patch('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .attach('avatar', Buffer.from('%PDF-1.4'), {
+        filename: 'doc.pdf',
+        contentType: 'application/pdf',
+      });
+
+    expect(res.status).toBe(415);
+    expect(res.body.error.code).toBe('INVALID_FILE_TYPE');
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when no file is attached', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
+    const res = await request(app)
+      .patch('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('requires authentication', async () => {
+    const res = await request(app)
+      .patch('/api/v1/users/me/avatar')
+      .attach('avatar', pngBytes, { filename: 'me.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('deletes the previous image when a new one is uploaded', async () => {
+    const { accessToken } = await signupAndLogin(userPayload);
+
+    const upload = () =>
+      request(app)
+        .patch('/api/v1/users/me/avatar')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('avatar', pngBytes, { filename: 'me.png', contentType: 'image/png' });
+
+    await upload(); // first upload — nothing to delete yet
+    expect(deleteFile).not.toHaveBeenCalled();
+
+    await upload(); // second upload — the first image should be cleaned up
+    expect(deleteFile).toHaveBeenCalledTimes(1);
   });
 });
 

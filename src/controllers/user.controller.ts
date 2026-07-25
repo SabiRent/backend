@@ -1,4 +1,6 @@
-import { SUCCESS_MESSAGE } from '@/constants/message';
+import { ErrorCode } from '@/constants/error-code';
+import { ERROR_MESSAGE, SUCCESS_MESSAGE } from '@/constants/message';
+import AppError from '@/errors/AppError';
 import {
   activateUser,
   changePassword,
@@ -6,6 +8,7 @@ import {
   getProfile,
   getUserById,
   listUsers,
+  updateAvatar,
   updateProfile,
 } from '@/services/user.service';
 import type { ChangePasswordInput, UpdateProfileInput } from '@/validations/user.validation';
@@ -27,6 +30,26 @@ export const updateProfileHandler = async (
   res.status(StatusCodes.OK).json({
     success: true,
     message: SUCCESS_MESSAGE.UPDATED,
+    data: user,
+  });
+};
+
+export const uploadAvatarHandler = async (req: Request, res: Response) => {
+  // The upload middleware puts the parsed file on req.file; it's absent when the
+  // client sends the request without attaching one.
+  if (!req.file) {
+    throw AppError(
+      ERROR_MESSAGE.NO_FILE_UPLOADED,
+      StatusCodes.BAD_REQUEST,
+      ErrorCode.INVALID_INPUT,
+    );
+  }
+
+  const user = await updateAvatar(req.user!.id, req.file);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: SUCCESS_MESSAGE.AVATAR_UPDATE_SUCCESS,
     data: user,
   });
 };

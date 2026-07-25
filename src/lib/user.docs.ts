@@ -14,8 +14,19 @@ const userProfileSchema = z.object({
   email: z.string(),
   role: z.string(),
   isActive: z.boolean(),
+  avatarUrl: z
+    .string()
+    .nullable()
+    .openapi({ example: 'https://res.cloudinary.com/demo/image/upload/avatar.png' }),
   createdAt: z.string().openapi({ example: '2026-07-20T10:46:15.836Z' }),
 });
+
+// The avatar endpoint takes a file upload (multipart/form-data), not JSON.
+const avatarUploadSchema = z
+  .object({
+    avatar: z.string().openapi({ type: 'string', format: 'binary' }),
+  })
+  .openapi('AvatarUploadInput');
 
 const userProfileResponseSchema = successResponseSchema('UserProfileResponse', userProfileSchema);
 
@@ -105,6 +116,39 @@ export const registerUserDocs = () => {
       '422': {
         description: 'Validation error',
         content: { 'application/json': { schema: validationErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'patch',
+    path: '/api/v1/users/me/avatar',
+    tags: ['Users'],
+    summary: "Upload or replace the logged-in user's profile image",
+    security: bearerAuth,
+    request: {
+      body: {
+        content: {
+          'multipart/form-data': { schema: avatarUploadSchema },
+        },
+      },
+    },
+    responses: {
+      '200': {
+        description: 'Profile image updated successfully',
+        content: { 'application/json': { schema: userProfileResponseSchema } },
+      },
+      '400': {
+        description: 'No file was uploaded',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '401': {
+        description: 'Missing or invalid access token',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '415': {
+        description: 'Unsupported file type (only JPEG, PNG, or WEBP images are allowed)',
+        content: { 'application/json': { schema: errorResponseSchema } },
       },
     },
   });
