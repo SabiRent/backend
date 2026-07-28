@@ -238,6 +238,149 @@ describe('GET /api/v1/properties', () => {
   });
 });
 
+describe('GET /api/v1/properties — search and sort', () => {
+  it('filters by a case-insensitive match on name', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    await createProperty(accessToken, { name: 'Palm Residences' });
+    await createProperty(accessToken, { name: 'Cedar Court' });
+
+    const res = await request(app)
+      .get('/api/v1/properties?search=cedar')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(1);
+    expect(res.body.properties[0].name).toBe('Cedar Court');
+  });
+
+  it('filters by a match on the address city', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    await createProperty(accessToken, {
+      name: 'Palm Residences',
+      address: JSON.stringify({ street: '1 Main Street', city: 'Abuja' }),
+    });
+    await createProperty(accessToken, {
+      name: 'Cedar Court',
+      address: JSON.stringify({ street: '7 Green Drive', city: 'Lekki' }),
+    });
+
+    const res = await request(app)
+      .get('/api/v1/properties?search=lekki')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(1);
+    expect(res.body.properties[0].name).toBe('Cedar Court');
+  });
+
+  it('returns an empty list when nothing matches the search term', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    await createProperty(accessToken);
+
+    const res = await request(app)
+      .get('/api/v1/properties?search=nonexistent')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(0);
+  });
+
+  it('treats regex special characters in the search term literally instead of erroring', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    await createProperty(accessToken, { name: 'Cedar Court' });
+
+    const res = await request(app)
+      .get(`/api/v1/properties?search=${encodeURIComponent('a+(')}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(0);
+  });
+
+  it('keeps search scoped to the logged-in landlord\'s own properties', async () => {
+    const { accessToken: token1 } = await signupAndLogin(landlordPayload);
+    const { accessToken: token2 } = await signupAndLogin(otherLandlordPayload);
+
+    await createProperty(token1, { name: 'Shared Name Court' });
+    await createProperty(token2, { name: 'Shared Name Court' });
+
+    const res = await request(app)
+      .get('/api/v1/properties?search=Shared')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(1);
+  });
+
+  it('sorts by name ascending when requested', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    await createProperty(accessToken, { name: 'Zeta House' });
+    await createProperty(accessToken, { name: 'Alpha House' });
+
+    const res = await request(app)
+      .get('/api/v1/properties?sortBy=name&sortOrder=asc')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties.map((p: { name: string }) => p.name)).toEqual([
+      'Alpha House',
+      'Zeta House',
+    ]);
+  });
+
+  it('sorts by unitCount descending when requested', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    await createProperty(accessToken, { name: 'Small Court', unitCount: '4' });
+    await createProperty(accessToken, { name: 'Big Court', unitCount: '20' });
+
+    const res = await request(app)
+      .get('/api/v1/properties?sortBy=unitCount&sortOrder=desc')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties.map((p: { name: string }) => p.name)).toEqual([
+      'Big Court',
+      'Small Court',
+    ]);
+  });
+
+  it('defaults to newest-first when sortBy/sortOrder are omitted', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    await createProperty(accessToken, { name: 'First Created' });
+    await createProperty(accessToken, { name: 'Second Created' });
+
+    const res = await request(app)
+      .get('/api/v1/properties')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.properties.map((p: { name: string }) => p.name)).toEqual([
+      'Second Created',
+      'First Created',
+    ]);
+  });
+
+  it('rejects an unsupported sortBy field', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+
+    const res = await request(app)
+      .get('/api/v1/properties?sortBy=owner')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects an unsupported sortOrder value', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+
+    const res = await request(app)
+      .get('/api/v1/properties?sortOrder=up')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(422);
+  });
+});
+
 describe('GET /api/v1/properties/:id', () => {
   it('lets the owner fetch their property', async () => {
     const { accessToken } = await signupAndLogin(landlordPayload);

@@ -57,3 +57,8 @@ export const parseDuration = (value: string): number => {
 
   return Number(match[1]) * DURATION_UNITS[match[2] ?? 'ms'];
 };
+
+// Escapes regex metacharacters in free-text search input before it's used to build a
+// MongoDB regex filter — without this, a search term like "a+" or "(" would either throw
+// as an invalid pattern or match unintended documents.
+export const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

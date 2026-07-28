@@ -28,9 +28,18 @@ export const createPropertyHandler = async (
 };
 
 export const listPropertiesHandler = async (req: Request, res: Response) => {
-  const { page, limit } = req.validatedQuery as unknown as ListPropertiesQuery;
+  const { page, limit, search, sortBy, sortOrder } =
+    req.validatedQuery as unknown as ListPropertiesQuery;
 
-  const result = await listProperties(req.user!.id, req.user!.role, page, limit);
+  const result = await listProperties(
+    req.user!.id,
+    req.user!.role,
+    page,
+    limit,
+    search,
+    sortBy,
+    sortOrder,
+  );
 
   res.status(StatusCodes.OK).json({ success: true, ...result });
 };

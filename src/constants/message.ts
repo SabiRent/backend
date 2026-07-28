@@ -52,4 +52,6 @@ export const ERROR_MESSAGE = {
   PROPERTY_NOT_FOUND: 'Property not found',
   INVALID_FILE_TYPE: 'Unsupported file type',
   NO_FILE_UPLOADED: 'No file was uploaded',
+  UNIT_NOT_FOUND: 'Unit not found',
+  UNIT_NAME_ALREADY_EXISTS: 'A unit with this name already exists for this property',
 } as const;

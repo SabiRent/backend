@@ -73,6 +73,18 @@ export const listPropertiesQuerySchema = z
       .optional()
       .default(20)
       .openapi({ example: 20 }),
+    search: z
+      .string()
+      .trim()
+      .min(1, 'Search term cannot be empty')
+      .optional()
+      .openapi({ example: 'Sunshine' }),
+    sortBy: z
+      .enum(['name', 'createdAt', 'unitCount'])
+      .optional()
+      .default('createdAt')
+      .openapi({ example: 'createdAt' }),
+    sortOrder: z.enum(['asc', 'desc']).optional().default('desc').openapi({ example: 'desc' }),
   })
   .openapi('ListPropertiesQuery');
 
