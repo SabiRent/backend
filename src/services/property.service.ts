@@ -5,9 +5,10 @@ import type { FileDocument } from '@/db/models/file.model';
 import Property, { type Property as PropertyDoc } from '@/db/models/property.model';
 import AppError from '@/errors/AppError';
 import { deleteFile, uploadFile } from '@/services/file.service';
+import { escapeRegExp } from '@/utils/helper.util';
 import type { CreatePropertyInput, UpdatePropertyInput } from '@/validations/property.validation';
 import { StatusCodes } from 'http-status-codes';
-import { isValidObjectId, type HydratedDocument } from 'mongoose';
+import { isValidObjectId, type HydratedDocument, type QueryFilter } from 'mongoose';
 
 const PROPERTY_IMAGE_FOLDER = 'property-photos';
 
@@ -35,7 +36,7 @@ const sanitizeProperty = (property: HydratedDocument<PropertyDoc>) => ({
   updatedAt: property.updatedAt,
 });
 
-const isPrivilegedRole = (role: UserRole) =>
+export const isPrivilegedRole = (role: UserRole) =>
   role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
 
 const findPropertyOrThrow = async (propertyId: string) => {
@@ -96,13 +97,23 @@ export const listProperties = async (
   role: UserRole,
   page: number,
   limit: number,
+  search?: string,
+  sortBy: 'name' | 'createdAt' | 'unitCount' = 'createdAt',
+  sortOrder: 'asc' | 'desc' = 'desc',
 ) => {
   const skip = (page - 1) * limit;
   // Landlords only ever see their own properties; admins/super-admins see everything.
-  const filter = isPrivilegedRole(role) ? {} : { owner: userId };
+  const filter: QueryFilter<PropertyDoc> = isPrivilegedRole(role) ? {} : { owner: userId };
+
+  if (search) {
+    const pattern = new RegExp(escapeRegExp(search), 'i');
+    filter.$or = [{ name: pattern }, { 'address.street': pattern }, { 'address.city': pattern }];
+  }
+
+  const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 } as const;
 
   const [properties, total] = await Promise.all([
-    Property.find(filter).skip(skip).limit(limit).populate('image'),
+    Property.find(filter).sort(sort).skip(skip).limit(limit).populate('image'),
     Property.countDocuments(filter),
   ]);
 
