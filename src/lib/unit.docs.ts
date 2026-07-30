@@ -24,6 +24,10 @@ const unitDataSchema = z.object({
   property: unitPropertyResponseSchema,
   name: z.string().openapi({ example: 'Unit 1A' }),
   occupancyStatus: z.string().openapi({ example: 'vacant' }),
+  tenant: z
+    .string()
+    .nullable()
+    .openapi({ description: 'Null until Tenant management is implemented', example: null }),
   rentAmount: z.number().openapi({ example: 500000 }),
   rentInterval: z.string().openapi({ example: 'yearly' }),
   createdAt: z.string().openapi({ example: '2026-07-20T10:46:15.836Z' }),
