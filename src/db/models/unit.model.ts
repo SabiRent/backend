@@ -1,5 +1,4 @@
 import { OccupancyStatus } from '@/constants/occupancy-status';
-import { RentInterval } from '@/constants/rent-interval';
 import { Schema, model, type InferSchemaType } from 'mongoose';
 
 const unitSchema = new Schema(
@@ -20,20 +19,9 @@ const unitSchema = new Schema(
       enum: Object.values(OccupancyStatus),
       default: OccupancyStatus.VACANT,
     },
-    rentAmount: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    rentInterval: {
-      type: String,
-      enum: Object.values(RentInterval),
-      default: RentInterval.YEARLY,
-    },
-    // No Tenant model exists yet (that's its own future feature) — this stays
-    // unset/null on every unit for now. Defined now so the API response shape
-    // doesn't change later: once Tenant management lands, this starts getting
-    // populated instead of the response gaining a brand-new field.
+    // Kept in sync by tenant.service: points at the unit's current non-inactive
+    // tenant (active or pending), or null if none. Rent lives on Tenant, not here —
+    // a unit has no rent of its own once a tenant's actual agreed rent is what matters.
     tenant: {
       type: Schema.Types.ObjectId,
       ref: 'Tenant',

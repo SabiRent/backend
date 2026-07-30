@@ -27,9 +27,7 @@ const unitDataSchema = z.object({
   tenant: z
     .string()
     .nullable()
-    .openapi({ description: 'Null until Tenant management is implemented', example: null }),
-  rentAmount: z.number().openapi({ example: 500000 }),
-  rentInterval: z.string().openapi({ example: 'yearly' }),
+    .openapi({ description: "The unit's current tenant ID, or null if unassigned", example: null }),
   createdAt: z.string().openapi({ example: '2026-07-20T10:46:15.836Z' }),
   updatedAt: z.string().openapi({ example: '2026-07-20T10:46:15.836Z' }),
 });

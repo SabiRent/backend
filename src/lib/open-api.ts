@@ -2,6 +2,7 @@ import { API_BASE_URL } from '@/config/env.config';
 import { registerAuthDocs } from '@/lib/auth.docs';
 import { registry } from '@/lib/open-api-registry';
 import { registerPropertyDocs } from '@/lib/property.docs';
+import { registerTenantDocs } from '@/lib/tenant.docs';
 import { registerUnitDocs } from '@/lib/unit.docs';
 import { registerUserDocs } from '@/lib/user.docs';
 import { OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
@@ -21,6 +22,7 @@ const ensureDocsRegistered = () => {
   registerUserDocs();
   registerPropertyDocs();
   registerUnitDocs();
+  registerTenantDocs();
 
   initialized = true;
 };
