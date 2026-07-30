@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@/config/env.config';
 import { registerAuthDocs } from '@/lib/auth.docs';
+import { registerNotificationDocs } from '@/lib/notification.docs';
 import { registry } from '@/lib/open-api-registry';
 import { registerPropertyDocs } from '@/lib/property.docs';
 import { registerUnitDocs } from '@/lib/unit.docs';
@@ -21,6 +22,7 @@ const ensureDocsRegistered = () => {
   registerUserDocs();
   registerPropertyDocs();
   registerUnitDocs();
+  registerNotificationDocs();
 
   initialized = true;
 };
