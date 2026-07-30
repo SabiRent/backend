@@ -30,6 +30,15 @@ const unitSchema = new Schema(
       enum: Object.values(RentInterval),
       default: RentInterval.YEARLY,
     },
+    // No Tenant model exists yet (that's its own future feature) — this stays
+    // unset/null on every unit for now. Defined now so the API response shape
+    // doesn't change later: once Tenant management lands, this starts getting
+    // populated instead of the response gaining a brand-new field.
+    tenant: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      default: null,
+    },
   },
   { timestamps: true },
 );

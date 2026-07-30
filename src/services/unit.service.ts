@@ -31,6 +31,9 @@ const sanitizeUnit = (unit: HydratedDocument<UnitDoc>) => {
     property: { id: property._id.toString(), name: property.name },
     name: unit.name,
     occupancyStatus: unit.occupancyStatus,
+    // Always null until Tenant management exists — no assignment endpoint
+    // sets this yet, so there's nothing to populate.
+    tenant: unit.tenant ? unit.tenant.toString() : null,
     rentAmount: unit.rentAmount,
     rentInterval: unit.rentInterval,
     createdAt: unit.createdAt,

@@ -90,6 +90,8 @@ describe('POST /api/v1/units', () => {
     expect(res.body.data.name).toBe('Unit 1A');
     expect(res.body.data.occupancyStatus).toBe('vacant');
     expect(res.body.data.rentInterval).toBe('yearly');
+    // No Tenant management yet — every unit reports an unassigned tenant.
+    expect(res.body.data.tenant).toBeNull();
   });
 
   it('rejects a request with no access token', async () => {
