@@ -12,6 +12,9 @@ export const SUCCESS_MESSAGE = {
   TOKEN_REFRESH_SUCCESS: 'Token refreshed successfully',
   LOGOUT_SUCCESS: 'Logged out successfully',
   PASSWORD_RESET_EMAIL_SENT: 'Password reset email sent successfully',
+  NOTIFICATION_MARKED_READ: 'Notification marked as read',
+  NOTIFICATIONS_ALL_MARKED_READ: 'All notifications marked as read',
+  NOTIFICATION_DELETED: 'Notification deleted successfully',
 } as const;
 
 export const ERROR_MESSAGE = {
@@ -56,4 +59,5 @@ export const ERROR_MESSAGE = {
   UNIT_NAME_ALREADY_EXISTS: 'A unit with this name already exists for this property',
   TENANT_NOT_FOUND: 'Tenant not found',
   UNIT_ALREADY_HAS_ACTIVE_TENANT: 'This unit already has an active tenant',
+  NOTIFICATION_NOT_FOUND: 'Notification not found',
 } as const;
