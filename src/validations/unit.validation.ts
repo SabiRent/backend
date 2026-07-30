@@ -1,5 +1,4 @@
 import { OccupancyStatus } from '@/constants/occupancy-status';
-import { RentInterval } from '@/constants/rent-interval';
 import { z } from '@/lib/zod';
 
 export const createUnitSchema = z
@@ -17,15 +16,6 @@ export const createUnitSchema = z
       .optional()
       .default(OccupancyStatus.VACANT)
       .openapi({ example: OccupancyStatus.VACANT }),
-    rentAmount: z.coerce
-      .number({ error: 'Rent amount is required' })
-      .min(0, 'Rent amount cannot be negative')
-      .openapi({ example: 500000 }),
-    rentInterval: z
-      .enum(RentInterval)
-      .optional()
-      .default(RentInterval.YEARLY)
-      .openapi({ example: RentInterval.YEARLY }),
   })
   .openapi('CreateUnitInput');
 
@@ -64,7 +54,7 @@ export const listUnitsQuerySchema = z
       .openapi({ example: 'Unit 1A' }),
     occupancyStatus: z.enum(OccupancyStatus).optional(),
     sortBy: z
-      .enum(['name', 'createdAt', 'rentAmount'])
+      .enum(['name', 'createdAt'])
       .optional()
       .default('createdAt')
       .openapi({ example: 'createdAt' }),

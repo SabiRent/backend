@@ -64,7 +64,6 @@ const createProperty = async (accessToken: string, overrides: Record<string, str
 const validUnitFields = (propertyId: string, overrides: Record<string, unknown> = {}) => ({
   property: propertyId,
   name: 'Unit 1A',
-  rentAmount: 500000,
   ...overrides,
 });
 
@@ -89,8 +88,6 @@ describe('POST /api/v1/units', () => {
     expect(res.body.data.property.id).toBe(propertyId);
     expect(res.body.data.name).toBe('Unit 1A');
     expect(res.body.data.occupancyStatus).toBe('vacant');
-    expect(res.body.data.rentInterval).toBe('yearly');
-    // No Tenant management yet — every unit reports an unassigned tenant.
     expect(res.body.data.tenant).toBeNull();
   });
 
@@ -110,15 +107,6 @@ describe('POST /api/v1/units', () => {
     const propertyId = await createProperty(accessToken);
 
     const res = await createUnit(accessToken, propertyId, { name: '' });
-
-    expect(res.status).toBe(422);
-  });
-
-  it('rejects a negative rent amount', async () => {
-    const { accessToken } = await signupAndLogin(landlordPayload);
-    const propertyId = await createProperty(accessToken);
-
-    const res = await createUnit(accessToken, propertyId, { rentAmount: -1 });
 
     expect(res.status).toBe(422);
   });
@@ -239,20 +227,20 @@ describe('GET /api/v1/units', () => {
     expect(res.body.units[0].name).toBe('Occupied Unit');
   });
 
-  it('sorts by rentAmount ascending when requested', async () => {
+  it('sorts by name ascending when requested', async () => {
     const { accessToken } = await signupAndLogin(landlordPayload);
     const propertyId = await createProperty(accessToken);
-    await createUnit(accessToken, propertyId, { name: 'Big Unit', rentAmount: 900000 });
-    await createUnit(accessToken, propertyId, { name: 'Small Unit', rentAmount: 100000 });
+    await createUnit(accessToken, propertyId, { name: 'Zeta Unit' });
+    await createUnit(accessToken, propertyId, { name: 'Alpha Unit' });
 
     const res = await request(app)
-      .get('/api/v1/units?sortBy=rentAmount&sortOrder=asc')
+      .get('/api/v1/units?sortBy=name&sortOrder=asc')
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.units.map((u: { name: string }) => u.name)).toEqual([
-      'Small Unit',
-      'Big Unit',
+      'Alpha Unit',
+      'Zeta Unit',
     ]);
   });
 

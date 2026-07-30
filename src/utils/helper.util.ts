@@ -1,4 +1,5 @@
 import { JWT_REFRESH_SECRET } from '@/config/env.config';
+import { PaymentFrequency } from '@/constants/payment-frequency';
 import argon2 from 'argon2';
 import crypto from 'node:crypto';
 
@@ -62,3 +63,18 @@ export const parseDuration = (value: string): number => {
 // MongoDB regex filter — without this, a search term like "a+" or "(" would either throw
 // as an invalid pattern or match unintended documents.
 export const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const MONTHS_PER_FREQUENCY: Record<PaymentFrequency, number> = {
+  [PaymentFrequency.MONTHLY]: 1,
+  [PaymentFrequency.QUARTERLY]: 3,
+  [PaymentFrequency.YEARLY]: 12,
+};
+
+// A tenant's next due date is never entered by the landlord — it's always derived from
+// their last payment date and how often they pay. Recomputed any time either input changes.
+export const calculateNextDueDate = (lastPaymentDate: Date, frequency: PaymentFrequency): Date => {
+  const nextDueDate = new Date(lastPaymentDate);
+  nextDueDate.setMonth(nextDueDate.getMonth() + MONTHS_PER_FREQUENCY[frequency]);
+
+  return nextDueDate;
+};

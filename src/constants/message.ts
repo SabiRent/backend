@@ -57,5 +57,7 @@ export const ERROR_MESSAGE = {
   NO_FILE_UPLOADED: 'No file was uploaded',
   UNIT_NOT_FOUND: 'Unit not found',
   UNIT_NAME_ALREADY_EXISTS: 'A unit with this name already exists for this property',
+  TENANT_NOT_FOUND: 'Tenant not found',
+  UNIT_ALREADY_HAS_ACTIVE_TENANT: 'This unit already has an active tenant',
   NOTIFICATION_NOT_FOUND: 'Notification not found',
 } as const;

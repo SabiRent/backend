@@ -31,11 +31,7 @@ const sanitizeUnit = (unit: HydratedDocument<UnitDoc>) => {
     property: { id: property._id.toString(), name: property.name },
     name: unit.name,
     occupancyStatus: unit.occupancyStatus,
-    // Always null until Tenant management exists — no assignment endpoint
-    // sets this yet, so there's nothing to populate.
     tenant: unit.tenant ? unit.tenant.toString() : null,
-    rentAmount: unit.rentAmount,
-    rentInterval: unit.rentInterval,
     createdAt: unit.createdAt,
     updatedAt: unit.updatedAt,
   };
@@ -75,7 +71,7 @@ const assertUnitOwnership = (unit: HydratedDocument<UnitDoc>, userId: string, ro
   }
 };
 
-const isDuplicateKeyError = (error: unknown): boolean =>
+export const isDuplicateKeyError = (error: unknown): boolean =>
   Boolean(error && typeof error === 'object' && 'code' in error && error.code === 11000);
 
 export const createUnit = async (ownerId: string, role: UserRole, input: CreateUnitInput) => {
@@ -109,7 +105,7 @@ export const listUnits = async (
   propertyId?: string,
   search?: string,
   occupancyStatus?: OccupancyStatus,
-  sortBy: 'name' | 'createdAt' | 'rentAmount' = 'createdAt',
+  sortBy: 'name' | 'createdAt' = 'createdAt',
   sortOrder: 'asc' | 'desc' = 'desc',
 ) => {
   const skip = (page - 1) * limit;
