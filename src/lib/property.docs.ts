@@ -11,6 +11,7 @@ import {
   listPropertiesQuerySchema,
   updatePropertySchema,
 } from '@/validations/property.validation';
+import { listUnitsQuerySchema } from '@/validations/unit.validation';
 
 const propertyAddressResponseSchema = z
   .object({
@@ -50,6 +51,29 @@ const propertyListResponseSchema = z
     }),
   })
   .openapi('PropertyListResponse');
+
+const unitDataSchema = z.object({
+  id: z.string().openapi({ example: '6a60b9659c16fbcbeab13e4a' }),
+  property: z.object({ id: z.string(), name: z.string() }),
+  name: z.string(),
+  occupancyStatus: z.string(),
+  tenant: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const propertyUnitsResponseSchema = z
+  .object({
+    success: z.literal(true),
+    units: z.array(unitDataSchema),
+    pagination: z.object({
+      page: z.number(),
+      limit: z.number(),
+      total: z.number(),
+      totalPages: z.number(),
+    }),
+  })
+  .openapi('PropertyUnitsResponse');
 
 // Documented as multipart/form-data (not JSON) because property creation/update accepts an
 // image file alongside the other fields. Reuses createPropertySchema/updatePropertySchema
@@ -144,6 +168,36 @@ export const registerPropertyDocs = () => {
       '404': {
         description:
           "No property with that ID, or it belongs to someone else — deliberately identical either way so a non-owner can't tell which one it is",
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/properties/{id}/units',
+    tags: ['Properties'],
+    summary: 'List units belonging to a property (owner or admin only)',
+    security: bearerAuth,
+    request: {
+      params: idParam,
+      query: listUnitsQuerySchema,
+    },
+    responses: {
+      '200': {
+        description: 'Paginated list of units for the property',
+        content: { 'application/json': { schema: propertyUnitsResponseSchema } },
+      },
+      '400': {
+        description: 'Invalid property ID format',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '401': {
+        description: 'Missing or invalid access token',
+        content: { 'application/json': { schema: errorResponseSchema } },
+      },
+      '404': {
+        description: 'No property with that ID, or it belongs to someone else',
         content: { 'application/json': { schema: errorResponseSchema } },
       },
     },

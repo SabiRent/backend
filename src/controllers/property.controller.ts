@@ -6,11 +6,13 @@ import {
   listProperties,
   updateProperty,
 } from '@/services/property.service';
+import { listUnits } from '@/services/unit.service';
 import type {
   CreatePropertyInput,
   ListPropertiesQuery,
   UpdatePropertyInput,
 } from '@/validations/property.validation';
+import type { ListUnitsQuery } from '@/validations/unit.validation';
 import type { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 
@@ -37,6 +39,25 @@ export const listPropertiesHandler = async (req: Request, res: Response) => {
     page,
     limit,
     search,
+    sortBy,
+    sortOrder,
+  );
+
+  res.status(StatusCodes.OK).json({ success: true, ...result });
+};
+
+export const listPropertyUnitsHandler = async (req: Request<{ id: string }>, res: Response) => {
+  const { page, limit, search, occupancyStatus, sortBy, sortOrder } =
+    req.validatedQuery as unknown as ListUnitsQuery;
+
+  const result = await listUnits(
+    req.user!.id,
+    req.user!.role,
+    page,
+    limit,
+    req.params.id,
+    search,
+    occupancyStatus,
     sortBy,
     sortOrder,
   );

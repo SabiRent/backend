@@ -95,9 +95,7 @@ describe('POST /api/v1/units', () => {
     const { accessToken } = await signupAndLogin(landlordPayload);
     const propertyId = await createProperty(accessToken);
 
-    const res = await request(app)
-      .post('/api/v1/units')
-      .send(validUnitFields(propertyId));
+    const res = await request(app).post('/api/v1/units').send(validUnitFields(propertyId));
 
     expect(res.status).toBe(401);
   });
@@ -215,7 +213,10 @@ describe('GET /api/v1/units', () => {
   it('filters by occupancyStatus', async () => {
     const { accessToken } = await signupAndLogin(landlordPayload);
     const propertyId = await createProperty(accessToken);
-    await createUnit(accessToken, propertyId, { name: 'Occupied Unit', occupancyStatus: 'occupied' });
+    await createUnit(accessToken, propertyId, {
+      name: 'Occupied Unit',
+      occupancyStatus: 'occupied',
+    });
     await createUnit(accessToken, propertyId, { name: 'Vacant Unit', occupancyStatus: 'vacant' });
 
     const res = await request(app)
@@ -250,7 +251,9 @@ describe('GET /api/v1/units', () => {
     const propertyId = await createProperty(landlordToken);
     await createUnit(landlordToken, propertyId);
 
-    const res = await request(app).get('/api/v1/units').set('Authorization', `Bearer ${adminToken}`);
+    const res = await request(app)
+      .get('/api/v1/units')
+      .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.units.length).toBeGreaterThanOrEqual(1);
@@ -259,15 +262,51 @@ describe('GET /api/v1/units', () => {
   it('defaults page and limit when the query is omitted', async () => {
     const { accessToken } = await signupAndLogin(landlordPayload);
 
-    const res = await request(app).get('/api/v1/units').set('Authorization', `Bearer ${accessToken}`);
+    const res = await request(app)
+      .get('/api/v1/units')
+      .set('Authorization', `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.pagination).toMatchObject({ page: 1, limit: 20 });
   });
 });
 
+describe('GET /api/v1/properties/:id/units', () => {
+  it('returns all units belonging to the property', async () => {
+    const { accessToken } = await signupAndLogin(landlordPayload);
+    const propertyId = await createProperty(accessToken);
+    const otherPropertyId = await createProperty(accessToken, { name: 'Palm Residences' });
+
+    await createUnit(accessToken, propertyId, { name: 'Unit 1A' });
+    await createUnit(accessToken, propertyId, { name: 'Unit 2B' });
+    await createUnit(accessToken, otherPropertyId, { name: 'Unit 3C' });
+
+    const res = await request(app)
+      .get(`/api/v1/properties/${propertyId}/units`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.units).toHaveLength(2);
+    expect(
+      res.body.units.every((unit: { property: { id: string } }) => unit.property.id === propertyId),
+    ).toBe(true);
+  });
+
+  it("blocks a different landlord from fetching a property's units", async () => {
+    const { accessToken: ownerToken } = await signupAndLogin(landlordPayload);
+    const { accessToken: otherToken } = await signupAndLogin(otherLandlordPayload);
+    const propertyId = await createProperty(ownerToken);
+
+    const res = await request(app)
+      .get(`/api/v1/properties/${propertyId}/units`)
+      .set('Authorization', `Bearer ${otherToken}`);
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('GET /api/v1/units/:id', () => {
-  it("lets the property owner fetch the unit", async () => {
+  it('lets the property owner fetch the unit', async () => {
     const { accessToken } = await signupAndLogin(landlordPayload);
     const propertyId = await createProperty(accessToken);
     const createRes = await createUnit(accessToken, propertyId);
