@@ -2,6 +2,7 @@ import {
   createPropertyHandler,
   deletePropertyHandler,
   getPropertyByIdHandler,
+  listPropertyUnitsHandler,
   listPropertiesHandler,
   updatePropertyHandler,
 } from '@/controllers/property.controller';
@@ -14,6 +15,7 @@ import {
   listPropertiesQuerySchema,
   updatePropertySchema,
 } from '@/validations/property.validation';
+import { listUnitsQuerySchema } from '@/validations/unit.validation';
 import { Router } from 'express';
 
 const router = Router();
@@ -28,6 +30,7 @@ const uploadPropertyImage = fileUploadFor([MimeType.JPEG, MimeType.PNG, MimeType
 // before validateSchema checks req.body's shape.
 router.post('/', uploadPropertyImage, validateSchema(createPropertySchema), createPropertyHandler);
 router.get('/', validateSchema(listPropertiesQuerySchema, 'query'), listPropertiesHandler);
+router.get('/:id/units', validateSchema(listUnitsQuerySchema, 'query'), listPropertyUnitsHandler);
 router.get('/:id', getPropertyByIdHandler);
 router.patch(
   '/:id',
