@@ -27,8 +27,8 @@ import jwt from 'jsonwebtoken';
 
 const refreshCookieBaseOptions = {
   httpOnly: true,
-  secure: NODE_ENV === NodeEnv.PRODUCTION,
-  sameSite: 'lax' as const,
+  secure: true,
+  sameSite: NODE_ENV === NodeEnv.PRODUCTION ? ('lax' as const) : ('none' as const),
 };
 
 const setRefreshTokenCookie = (res: Response, refreshToken: string) => {
