@@ -1,4 +1,4 @@
-# Logs
+ Logs
 logs
 *.log
 npm-debug.log*
@@ -14,10 +14,13 @@ dist
 dist-ssr
 *.local
 coverage
+.env
+.env.*
 !.env.example
 !.env.test.example
 
 # Editor directories and files
+.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -39,4 +42,3 @@ http
 /uploads
 .tsbuildinfo
 .tsbuildinfo.*
-config.bat
