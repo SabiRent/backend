@@ -14,6 +14,7 @@ dist
 dist-ssr
 *.local
 coverage
+*.env
 !.env.example
 !.env.test.example
 
@@ -39,4 +40,3 @@ http
 /uploads
 .tsbuildinfo
 .tsbuildinfo.*
-config.bat
