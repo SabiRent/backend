@@ -8,7 +8,7 @@
     "worker:dev": "tsx watch src/worker.ts",
     "worker:start": "node dist/worker.mjs",
     "build": "tsdown",
-    "start": node dist/server.mjs",
+    "start": "node dist/server.mjs",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch --preserveWatchOutput",
     "lint": "eslint src",
